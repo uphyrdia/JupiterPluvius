@@ -1,9 +1,10 @@
 # CG2271---Group-3
 Can put our lab shit here
 
-Can open in the IDE by .project. Can put Arduino code in the Arduino folder.
-Darker environment yields higher light sensor ADC. 
-Wetter soil yields lower ADC.
-The interrupt is triggered by ADC instead of GPIO since the latter requires a comparator.
+Can import the whole folder in the IDE. Can put Arduino code in the Arduino folder.
+The comparator interrupt works now.
+
+For reference:
+https://45-in-1-sensor-kit.readthedocs.io/en/latest/
 
 
