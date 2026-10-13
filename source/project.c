@@ -17,6 +17,11 @@
 #include "clock_config.h"
 #include "fsl_debug_console.h"
 
+#include "fsl_cmp.h"
+#include "fsl_port.h"
+#include "fsl_clock.h"
+#include "fsl_common.h"
+
 #include <string.h>
 #include "FreeRTOS.h"
 #include "task.h"
@@ -37,9 +42,7 @@
 // Soil AO: PTB2 (A2 / J4 pin 6), ADC0 channel 12.
 #define SOIL_PIN        2U
 #define SOIL_ADC_CHANNEL 12U
-// Light analog output: PTB3 (A3 / J4 pin 8), ADC0 channel 13.
-#define LIGHT_PIN       3U
-#define LIGHT_ADC_CHANNEL 13U
+// Light analog output: PTC6 (J1 pin 9), CMP0 input 0.
 
 #define QLEN	5
 
@@ -47,8 +50,8 @@ QueueHandle_t queue;
 SemaphoreHandle_t sema; // Reserved for recvTask -> pwmTask
 SemaphoreHandle_t light_sema;
 SemaphoreHandle_t adc_mutex;
-static volatile unsigned int light_adc_result;
 SemaphoreHandle_t mutex;
+static volatile int light = 0;
 
 typedef enum tl {
 	RED, GREEN, BLUE
@@ -57,6 +60,85 @@ typedef enum tl {
 typedef struct tm {
 	char message[MAX_MSG_LEN];
 } TMessage;
+
+/* Call after your normal board initialization. */
+void Comparator_Init(void)
+{
+    /* PTC6 / J1 pin 9: analog comparator input. */
+    CLOCK_EnableClock(kCLOCK_PortC);
+    PORT_SetPinMux(PORTC, 6U, kPORT_PinDisabledOrAnalog);
+
+    cmp_config_t config;
+    CMP_GetDefaultConfig(&config);
+    config.enableCmp = false;
+    config.enableHighSpeed = true;
+    config.enableInvertOutput = false;
+    config.enablePinOut = false;
+    config.hysteresisMode = kCMP_HysteresisLevel3;
+    CMP_Init(CMP0, &config);
+
+    cmp_dac_config_t threshold = {0};
+    threshold.referenceVoltageSource = kCMP_VrefSourceVin2;
+    threshold.DACValue = 5U;  /* 1.65 V with a 3.3 V reference */
+    CMP_SetDACConfig(CMP0, &threshold);
+
+    /* Positive = PTC6 (IN0); negative = internal DAC (IN7). */
+    CMP_SetInputChannels(CMP0, 0U, 7U);
+    CMP_Enable(CMP0, true);
+}
+
+/* Read after allowing the comparator/DAC to settle. */
+bool Comparator_IsAboveThreshold(void)
+{
+    return (CMP_GetStatusFlags(CMP0) &
+            kCMP_OutputAssertEventFlag) != 0U;
+}
+
+volatile uint32_t comparatorRiseCount = 0U;
+
+void ComparatorInterrupt_Init(void)
+{
+    DisableIRQ(CMP0_IRQn);
+
+    /* Configure PTC6 and the internal DAC threshold. */
+    Comparator_Init();
+
+    /* Allow the comparator and DAC to settle. */
+    SDK_DelayAtLeastUs(50U, SystemCoreClock);
+
+    /* Discard any events produced during initialization. */
+    CMP_ClearStatusFlags(CMP0,
+                         kCMP_OutputRisingEventFlag |
+                         kCMP_OutputFallingEventFlag);
+    NVIC_ClearPendingIRQ(CMP0_IRQn);
+
+    light = Comparator_IsAboveThreshold() ? 1 : 0;
+    CMP_EnableInterrupts(CMP0, kCMP_OutputRisingInterruptEnable |
+                              kCMP_OutputFallingInterruptEnable);
+    EnableIRQ(CMP0_IRQn);
+}
+
+void CMP0_IRQHandler(void)
+{
+    uint32_t flags = CMP_GetStatusFlags(CMP0);
+
+    uint32_t edges = flags & (kCMP_OutputRisingEventFlag |
+                              kCMP_OutputFallingEventFlag);
+    if (edges != 0U) {
+        /* Clear all observed edges, then report the current input state. */
+        CMP_ClearStatusFlags(CMP0, edges);
+        light = Comparator_IsAboveThreshold() ? 1 : 0;
+        if ((edges & kCMP_OutputRisingEventFlag) != 0U)
+            comparatorRiseCount++;
+
+        BaseType_t hpw = pdFALSE;
+        xSemaphoreGiveFromISR(light_sema, &hpw);
+        portYIELD_FROM_ISR(hpw);
+
+    }
+
+    SDK_ISR_EXIT_BARRIER;
+}
 
 /* ----------------Template code to use PWM for servo motors-----------------*/
 // Configure the MCG Internal Reference Clock
@@ -206,7 +288,6 @@ static void initADC(void)
 
 	// MUX = 0 selects analog function
 	PORTB->PCR[SOIL_PIN] &= ~PORT_PCR_MUX_MASK;
-	PORTB->PCR[LIGHT_PIN] &= ~PORT_PCR_MUX_MASK;
 
 	ADC0->CFG1 = ADC_CFG1_MODE(1)	// 12-bit resolution
 			| ADC_CFG1_ADLSMP_MASK  // Long sampling time
@@ -256,16 +337,6 @@ static void initADC(void)
 	NVIC_EnableIRQ(ADC0_IRQn);
 }
 
-void ADC0_IRQHandler(void)
-{
-	BaseType_t hpw = pdFALSE;
-	if (ADC0->SC1[0] & ADC_SC1_COCO_MASK) {
-		light_adc_result = ADC0->R[0]; // Reading R clears completion flag
-		xSemaphoreGiveFromISR(light_sema, &hpw);
-	}
-	portYIELD_FROM_ISR(hpw);
-}
-
 /* --------------------------------Tasks-------------------------------------*/
 static void pwmTask(void *p)
 {
@@ -308,18 +379,10 @@ static void soil_moisture_sensor_task(void *p)
 static void light_sensor_task(void *p)
 {
 	for (;;) {
-		if (xSemaphoreTake(adc_mutex, portMAX_DELAY) != pdTRUE)
-			continue;
-		// AIEN = 1: the ISR reads the result and wakes this task.
-		ADC0->SC1[0] = ADC_SC1_ADCH(LIGHT_ADC_CHANNEL) | ADC_SC1_AIEN_MASK;
 		while (xSemaphoreTake(light_sema, portMAX_DELAY) != pdTRUE) {}
-		unsigned int light = light_adc_result;
-		xSemaphoreGive(adc_mutex);
-
 		while (xSemaphoreTake(mutex, portMAX_DELAY) != pdTRUE) {}
-		PRINTF("Light ADC: %u\r\n", light); // Raw 0..4095
+		PRINTF("Light: %d\r\n", light);
 		xSemaphoreGive(mutex);
-		vTaskDelay(pdMS_TO_TICKS(500));
 	}
 }
 
@@ -338,10 +401,11 @@ int main(void)
 #endif
 	queue = xQueueCreate(QLEN, sizeof(TMessage));
 	sema = xSemaphoreCreateBinary(); // recvTask -> pwmTask
-	light_sema = xSemaphoreCreateBinary(); // Light ADC conversion completion
+	light_sema = xSemaphoreCreateBinary(); // Comparator state changed
 	adc_mutex = xSemaphoreCreateMutex(); // One ADC conversion at a time
 	mutex = xSemaphoreCreateMutex(); // Protect distance and serialize task PRINTF calls
 
+	ComparatorInterrupt_Init();
 	initADC();
 	initUART2(BAUD_RATE);
 	PRINTF("CG2271 Project\r\n");
