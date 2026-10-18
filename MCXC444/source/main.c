@@ -48,9 +48,9 @@
 
 QueueHandle_t queue;
 SemaphoreHandle_t sema; // Reserved for recvTask -> pwmTask
-SemaphoreHandle_t light_sema;
+SemaphoreHandle_t water_level_sema;
 SemaphoreHandle_t adc_mutex;
-SemaphoreHandle_t mutex;
+SemaphoreHandle_t print_mutex;
 static volatile int light = 0;
 
 typedef enum tl {
@@ -132,7 +132,7 @@ void CMP0_IRQHandler(void)
             comparatorRiseCount++;
 
         BaseType_t hpw = pdFALSE;
-        xSemaphoreGiveFromISR(light_sema, &hpw);
+        xSemaphoreGiveFromISR(water_level_sema, &hpw);
         portYIELD_FROM_ISR(hpw);
 
     }
@@ -349,9 +349,9 @@ static void recvTask(void *p)
 		TMessage msg;
 		if (xQueueReceive(queue, (void *)&msg, portMAX_DELAY) != pdTRUE)
 			continue;
-		if (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE) {
+		if (xSemaphoreTake(print_mutex, portMAX_DELAY) == pdTRUE) {
 			PRINTF("Received message: %s\r\n", msg.message);
-			xSemaphoreGive(mutex);
+			xSemaphoreGive(print_mutex);
 		}
 	}
 }
@@ -369,20 +369,20 @@ static void soil_moisture_sensor_task(void *p)
 		unsigned int moisture = ADC0->R[0];
 		xSemaphoreGive(adc_mutex);
 
-		while (xSemaphoreTake(mutex, portMAX_DELAY) != pdTRUE) {}
+		while (xSemaphoreTake(print_mutex, portMAX_DELAY) != pdTRUE) {}
 		PRINTF("Soil moisture ADC: %u\r\n", moisture); // Raw 0..4095
-		xSemaphoreGive(mutex);
+		xSemaphoreGive(print_mutex);
 		vTaskDelay(pdMS_TO_TICKS(500));
 	}
 }
 
-static void light_sensor_task(void *p)
+static void water_level_task(void *p)
 {
 	for (;;) {
-		while (xSemaphoreTake(light_sema, portMAX_DELAY) != pdTRUE) {}
-		while (xSemaphoreTake(mutex, portMAX_DELAY) != pdTRUE) {}
+		while (xSemaphoreTake(water_level_sema, portMAX_DELAY) != pdTRUE) {}
+		while (xSemaphoreTake(print_mutex, portMAX_DELAY) != pdTRUE) {}
 		PRINTF("Light: %d\r\n", light);
-		xSemaphoreGive(mutex);
+		xSemaphoreGive(print_mutex);
 	}
 }
 
@@ -399,23 +399,25 @@ int main(void)
     /* Init FSL debug console. */
     BOARD_InitDebugConsole();
 #endif
+
 	queue = xQueueCreate(QLEN, sizeof(TMessage));
+
 	sema = xSemaphoreCreateBinary(); // recvTask -> pwmTask
-	light_sema = xSemaphoreCreateBinary(); // Comparator state changed
+	water_level_sema = xSemaphoreCreateBinary(); // Comparator state changed
+
 	adc_mutex = xSemaphoreCreateMutex(); // One ADC conversion at a time
-	mutex = xSemaphoreCreateMutex(); // Protect distance and serialize task PRINTF calls
+	print_mutex = xSemaphoreCreateMutex(); // Protect distance and serialize task PRINTF calls
 
 	ComparatorInterrupt_Init();
 	initADC();
 	initUART2(BAUD_RATE);
 	PRINTF("CG2271 Project\r\n");
+
 	xTaskCreate(recvTask, "recvTask", configMINIMAL_STACK_SIZE+100, NULL, 2, NULL);
 	// Enable after implementing pwmTask; an empty FreeRTOS task must not run.
 	// xTaskCreate(pwmTask, "pwmTask", configMINIMAL_STACK_SIZE+100, NULL, 1, NULL);
-	xTaskCreate(soil_moisture_sensor_task, "soil", configMINIMAL_STACK_SIZE+100,
-	            NULL, 1, NULL);
-	xTaskCreate(light_sensor_task, "light", configMINIMAL_STACK_SIZE+100,
-	            NULL, 2, NULL);
+	xTaskCreate(soil_moisture_sensor_task, "soil", configMINIMAL_STACK_SIZE+100, NULL, 1, NULL);
+	xTaskCreate(water_level_task, "water", configMINIMAL_STACK_SIZE+100, NULL, 2, NULL);
 
     vTaskStartScheduler();
 
