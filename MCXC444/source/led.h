@@ -4,6 +4,7 @@
 #define RED_PIN		31	// PTE31
 #define GREEN_PIN	5	// PTD5
 #define BLUE_PIN	29	// PTE29
+#define PUMP_PIN 	30  // PTE30
 
 void initLED(void);
 

@@ -40,7 +40,7 @@ void Comparator_Init(void)
 
     cmp_dac_config_t threshold = {0};
     threshold.referenceVoltageSource = kCMP_VrefSourceVin2;
-    threshold.DACValue = 5U;  /* 1.65 V with a 3.3 V reference */
+    threshold.DACValue = 31U;  /* 1.65 V with a 3.3 V reference */
     CMP_SetDACConfig(CMP0, &threshold);
 
     /* Positive = PTC6 (IN0); negative = internal DAC (IN7). */

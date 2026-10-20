@@ -32,6 +32,7 @@
 
 QueueHandle_t queue;
 SemaphoreHandle_t led_sema;
+SemaphoreHandle_t pump_sema;
 SemaphoreHandle_t water_level_sema;
 SemaphoreHandle_t servo_sema;
 SemaphoreHandle_t adc_mutex;
@@ -39,6 +40,7 @@ SemaphoreHandle_t print_mutex;
 
 static volatile int led_on = 0;
 static volatile uint16_t servo_ticks = 47;
+static volatile unsigned int moisture = 2000;
 
 static void ledTask(void *p)
 {
@@ -77,6 +79,18 @@ static void recvTask(void *p)
 	}
 }
 
+static void pump_task(void *p)
+{
+	for (;;) {
+		while (xSemaphoreTake(pump_sema, portMAX_DELAY) != pdTRUE) {}
+		if (moisture < 1200) {
+			GPIOE->PSOR = (1UL << PUMP_PIN);
+			vTaskDelay(pdMS_TO_TICKS(1000));
+			GPIOE->PCOR = (1UL << PUMP_PIN);
+		}
+	}
+}
+
 static void soil_moisture_sensor_task(void *p)
 {
 	for (;;) {
@@ -87,12 +101,15 @@ static void soil_moisture_sensor_task(void *p)
 		// AIEN = 0: this conversion is polled, with no ADC interrupt.
 		ADC0->SC1[0] = ADC_SC1_ADCH(SOIL_ADC_CHANNEL);
 		while (!(ADC0->SC1[0] & ADC_SC1_COCO_MASK)) {}
-		unsigned int moisture = ADC0->R[0];
+		moisture = ADC0->R[0];
 		xSemaphoreGive(adc_mutex);
 
 		while (xSemaphoreTake(print_mutex, portMAX_DELAY) != pdTRUE) {}
 		PRINTF("Soil moisture ADC: %u\r\n", moisture); // Raw 0..4095
 		xSemaphoreGive(print_mutex);
+
+		xSemaphoreGive(pump_sema);
+
 		vTaskDelay(pdMS_TO_TICKS(500));
 	}
 }
@@ -102,7 +119,7 @@ static void water_level_task(void *p)
 	for (;;) {
 		while (xSemaphoreTake(water_level_sema, portMAX_DELAY) != pdTRUE) {}
 		while (xSemaphoreTake(print_mutex, portMAX_DELAY) != pdTRUE) {}
-		PRINTF("Light: %d\r\n", above_threshold);
+		PRINTF("Water Level: %d\r\n", above_threshold);
 		xSemaphoreGive(print_mutex);
 	}
 }
@@ -123,11 +140,12 @@ int main(void)
 
 	queue = xQueueCreate(QLEN, sizeof(TMessage));
 
-	servo_sema = xSemaphoreCreateBinary();
+	servo_sema = xSemaphoreCreateBinary(); // initialized to 0
+	pump_sema = xSemaphoreCreateBinary();
 	led_sema = xSemaphoreCreateBinary();
 	water_level_sema = xSemaphoreCreateBinary(); // Comparator state changed
 
-	adc_mutex = xSemaphoreCreateMutex(); // One ADC conversion at a time
+	adc_mutex = xSemaphoreCreateMutex(); // initialized to 1
 	print_mutex = xSemaphoreCreateMutex(); // Protect distance and serialize task PRINTF calls
 
 	initLED();
@@ -139,8 +157,9 @@ int main(void)
 	PRINTF("CG2271 Project\r\n");
 
 	xTaskCreate(recvTask, "recvTask", configMINIMAL_STACK_SIZE+100, NULL, 2, NULL);
-	xTaskCreate(soil_moisture_sensor_task, "soil", configMINIMAL_STACK_SIZE+100, NULL, 1, NULL);
+	xTaskCreate(soil_moisture_sensor_task, "soil", configMINIMAL_STACK_SIZE+100, NULL, 3, NULL);
 	xTaskCreate(water_level_task, "water", configMINIMAL_STACK_SIZE+100, NULL, 2, NULL);
+	xTaskCreate(pump_task, "pump", configMINIMAL_STACK_SIZE+100, NULL, 2, NULL);
 
     vTaskStartScheduler();
 

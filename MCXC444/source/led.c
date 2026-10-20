@@ -13,13 +13,18 @@ void initLED(void)
 	PORTD->PCR[GREEN_PIN] |= PORT_PCR_MUX(1U);
 	PORTE->PCR[BLUE_PIN] &= ~PORT_PCR_MUX_MASK;
 	PORTE->PCR[BLUE_PIN] |= PORT_PCR_MUX(1U);
+	PORTE->PCR[PUMP_PIN] &= ~PORT_PCR_MUX_MASK;
+	PORTE->PCR[PUMP_PIN] |= PORT_PCR_MUX(1U);
 	// Set as output
 	GPIOE->PDDR |= (1UL << RED_PIN);
 	GPIOD->PDDR |= (1UL << GREEN_PIN);
 	GPIOE->PDDR |= (1UL << BLUE_PIN);
+	GPIOE->PDDR |= (1UL << PUMP_PIN);
 	// Turn off at boot
 	// LEDs are active low, writing 0 to a bit in PSOR/PCOR has no effect
 	GPIOE->PSOR = (1UL << RED_PIN);
 	GPIOD->PSOR = (1UL << GREEN_PIN);
 	GPIOE->PSOR = (1UL << BLUE_PIN);
+
+	GPIOE->PCOR = (1UL << PUMP_PIN);
 }
