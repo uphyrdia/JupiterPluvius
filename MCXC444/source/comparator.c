@@ -1,12 +1,3 @@
-/*
- * comparator.c
- *
- * Analog comparator (CMP0) initialization and interrupt handling.
- */
-
-#include <stdbool.h>
-#include <stdint.h>
-
 #include "fsl_cmp.h"
 #include "fsl_port.h"
 #include "fsl_clock.h"
@@ -22,7 +13,6 @@
 /* Comparator state, read by the water level task. */
 volatile int above_threshold = 0;
 
-/* Call after your normal board initialization. */
 void Comparator_Init(void)
 {
     /* PTC6 / J1 pin 9: analog comparator input. */
@@ -51,12 +41,13 @@ void Comparator_Init(void)
 /* Read after allowing the comparator/DAC to settle. */
 bool Comparator_IsAboveThreshold(void)
 {
-    return (CMP_GetStatusFlags(CMP0) &
-            kCMP_OutputAssertEventFlag) != 0U;
+    return (CMP_GetStatusFlags(CMP0) & kCMP_OutputAssertEventFlag) != 0U;
 }
 
+/* Number of rising edges seen by the comparator interrupt. */
 volatile uint32_t comparatorRiseCount = 0U;
 
+/* Comparator_Init() plus interrupt setup; call once before starting the scheduler. */
 void ComparatorInterrupt_Init(void)
 {
     DisableIRQ(CMP0_IRQn);
@@ -68,14 +59,11 @@ void ComparatorInterrupt_Init(void)
     SDK_DelayAtLeastUs(50U, SystemCoreClock);
 
     /* Discard any events produced during initialization. */
-    CMP_ClearStatusFlags(CMP0,
-                         kCMP_OutputRisingEventFlag |
-                         kCMP_OutputFallingEventFlag);
+    CMP_ClearStatusFlags(CMP0, kCMP_OutputRisingEventFlag | kCMP_OutputFallingEventFlag);
     NVIC_ClearPendingIRQ(CMP0_IRQn);
 
     above_threshold = Comparator_IsAboveThreshold() ? 1 : 0;
-    CMP_EnableInterrupts(CMP0, kCMP_OutputRisingInterruptEnable |
-                              kCMP_OutputFallingInterruptEnable);
+    CMP_EnableInterrupts(CMP0, kCMP_OutputRisingInterruptEnable | kCMP_OutputFallingInterruptEnable);
     EnableIRQ(CMP0_IRQn);
 }
 
@@ -83,8 +71,7 @@ void CMP0_IRQHandler(void)
 {
     uint32_t flags = CMP_GetStatusFlags(CMP0);
 
-    uint32_t edges = flags & (kCMP_OutputRisingEventFlag |
-                              kCMP_OutputFallingEventFlag);
+    uint32_t edges = flags & (kCMP_OutputRisingEventFlag | kCMP_OutputFallingEventFlag);
     if (edges != 0U) {
         /* Clear all observed edges, then report the current input state. */
         CMP_ClearStatusFlags(CMP0, edges);

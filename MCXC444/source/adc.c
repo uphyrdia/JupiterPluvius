@@ -1,15 +1,8 @@
-/*
- * adc.c
- *
- * ADC0 setup for the soil moisture sensor.
- */
-
 #include "fsl_common.h"
 #include "fsl_debug_console.h"
 
 #include "adc.h"
 
-/* ----------------------------ADC configuration-----------------------------*/
 void initADC(void)
 {
 	SIM->SCGC5 |= SIM_SCGC5_PORTB_MASK;
