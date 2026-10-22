@@ -163,19 +163,16 @@ static void water_level_sensor_task(void *p)
 	snprintf(msg.message, MAX_MSG_LEN, "WATER:%d\n", above_threshold);
 	UART2_Send(&msg);
 
-	for (;;)
-	{
+	for (;;) {
 		while (xSemaphoreTake(water_level_sema, portMAX_DELAY) != pdTRUE) {}
 
 		snprintf(msg.message, MAX_MSG_LEN, "WATER:%d\n", above_threshold);
 		UART2_Send(&msg);
-//		water_event = 1;          /* include WATER in the next outgoing message */
-//		xSemaphoreGive(send_sema); /* send it immediately */
+
 		if (!above_threshold) {
-			// TODO
-			// a debouncing is probably needed for above_threshold
 			// set buzzer active to notify the user
 		}
+
 		if (xSemaphoreTake(print_mutex, portMAX_DELAY) == pdTRUE) {
 			PRINTF("Water Level: %d\r\n", above_threshold);
 			xSemaphoreGive(print_mutex);
