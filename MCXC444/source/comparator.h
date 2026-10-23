@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#define WATER_LEVEL_PIN		6	// PTC6
+
 extern volatile int above_threshold;
 extern volatile uint32_t comparatorRiseCount;
 
