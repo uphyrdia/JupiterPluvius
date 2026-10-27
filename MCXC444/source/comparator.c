@@ -10,9 +10,6 @@
 #include "shared.h"
 #include "comparator.h"
 
-/* Comparator state, read by the water level task. */
-volatile int above_threshold = 0;
-
 void Comparator_Init(void)
 {
 	/* PTC6 / J1 pin 9: analog comparator input.
