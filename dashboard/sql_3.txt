@@ -1,0 +1,9 @@
+GRANT SELECT ON TABLE public.readings TO authenticated;
+
+CREATE POLICY "backend_read"
+ON public.readings
+FOR SELECT
+TO authenticated
+USING (
+    (SELECT auth.uid()) = 'dbc5f468-159b-49d2-bc53-8709ff5f6124'::uuid
+);
