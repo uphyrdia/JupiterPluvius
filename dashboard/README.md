@@ -10,7 +10,7 @@ Browser <--polls every 5 s-- FastAPI backend --+
 
 - `backend/main.py`: FastAPI. Signs in to Supabase as the read-only backend user, caches the token, and exposes:
   - `GET /api/latest`: newest reading (or `null`)
-  - `GET /api/readings?hours=1&after_id=123&include_test=true`: readings in the window, oldest first. Long ranges are thinned to ≤ 1500 points.
+  - `GET /api/readings?hours=1&after_id=123&include_test=true`: readings in the window, oldest first. At most the newest 1000 are returned (Supabase's per-request limit).
   - `GET /api/health`
   - `/`: serves `frontend/`
 - `frontend/`: plain HTML/CSS/JS, using Chart.js from a CDN. It needs no build step. Calibration constants (`SOIL_DRY_RAW`, `SOIL_WET_RAW`) and the poll rate are at the top of `frontend/app.js`.

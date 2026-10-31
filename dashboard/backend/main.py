@@ -28,8 +28,7 @@ SUPABASE_KEY = os.environ["SUPABASE_PUBLISHABLE_KEY"]
 BACKEND_EMAIL = os.environ["BACKEND_EMAIL"]
 BACKEND_PASSWORD = os.environ["BACKEND_PASSWORD"]
 
-PAGE_SIZE = 1000   # Supabase's default max rows per request
-MAX_PAGES = 50     # hard cap: never pull more than 50k rows for one request
+MAX_ROWS = 1000   # Supabase's default max rows per request
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
@@ -102,34 +101,23 @@ async def readings(
     after_id: int | None = None,
     device_id: str | None = None,
     include_test: bool = True,
-    max_points: int = Query(1500, ge=10, le=10000),
 ):
-    """Readings from the last `hours`, oldest first.
+    """The newest (up to 1000) readings from the last `hours`, oldest first.
 
     `after_id` returns only rows newer than that id (used by the frontend's polling).
-    Long ranges are evenly thinned to at most `max_points` rows so the browser stays fast.
+    If the window holds more than 1000 readings, only the most recent 1000 are returned.
     """
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
     params = base_filters(device_id, include_test) | {
         "created_at": f"gte.{since.isoformat()}",
-        "order": "id.asc",
-        "limit": str(PAGE_SIZE),
+        "order": "id.desc",  # newest first, so the limit cuts off the oldest rows
+        "limit": str(MAX_ROWS),
     }
     if after_id is not None:
         params["id"] = f"gt.{after_id}"
 
-    rows: list[dict] = []
-    for page in range(MAX_PAGES):
-        batch = await select_readings(params | {"offset": str(page * PAGE_SIZE)})
-        rows.extend(batch)
-        if len(batch) < PAGE_SIZE:
-            break
-
-    if len(rows) > max_points:
-        step = len(rows) / max_points
-        thinned = [rows[int(i * step)] for i in range(max_points)]
-        thinned[-1] = rows[-1]  # always keep the newest reading
-        rows = thinned
+    rows = await select_readings(params)
+    rows.reverse()  # the frontend expects oldest first
     return rows
 
 
