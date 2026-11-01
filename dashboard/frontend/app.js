@@ -48,13 +48,19 @@ function ago(seconds) {
 }
 const fmtNum = (v, digits = 1) => (v == null ? "—" : Number(v).toFixed(digits));
 
-async function api(path, params = {}) {
+async function api(path, params = {}, method = "GET") {
   const url = new URL(CONFIG.API_BASE + path, location.href);
   Object.entries(params).forEach(([k, v]) => v != null && url.searchParams.set(k, v));
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+  const res = await fetch(url, { method });
+  if (!res.ok) {
+    const text = await res.text();
+    let detail = text;
+    try { detail = JSON.parse(text).detail ?? text; } catch {} // FastAPI errors are {"detail": "..."}
+    throw new Error(`${res.status}: ${detail}`);
+  }
   return res.json();
 }
+const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 // ---------------------------------------------------------------------------
 // Plant scene
@@ -389,12 +395,65 @@ async function poll() {
   renderConnection();
 }
 
+// ---------------------------------------------------------------------------
+// AI check-up (DeepSeek, via the backend)
+// ---------------------------------------------------------------------------
+const AI_STATUS = {
+  good: ["status-good", "✓", "All good"],
+  attention: ["status-warn", "⚠", "Needs attention"],
+  urgent: ["status-bad", "⛔", "Urgent"],
+};
+const AI_PRIORITY = { info: "ℹ️", warning: "⚠️", urgent: "⛔" };
+
+function renderAi(r, seconds) {
+  const meta = `<p class="ai-meta">${esc(r.model)} · ${r.readings} readings · ${seconds.toFixed(1)} s`
+    + `${r.tokens ? ` · ${r.tokens.toLocaleString()} tokens` : ""} · ${new Date().toLocaleTimeString()}</p>`;
+  if (r.raw != null) { // the model didn't return the JSON shape we asked for
+    $("ai-out").innerHTML = `<p class="ai-raw">${esc(r.raw)}</p>${meta}`;
+    return;
+  }
+  const [cls, icon, label] = AI_STATUS[r.status] || AI_STATUS.attention;
+  const summary = (r.summary || []).map((s) => `<li>${esc(s)}</li>`).join("");
+  const advice = (r.advice || []).map((a) =>
+    `<li><span aria-hidden="true">${AI_PRIORITY[a.priority] || "•"}</span> ${esc(a.text)}</li>`).join("");
+  $("ai-out").innerHTML = `
+    <p class="ai-headline"><span class="ai-badge ${cls}">${icon} ${label}</span> ${esc(r.headline || "")}</p>
+    ${summary ? `<h3>Summary</h3><ul>${summary}</ul>` : ""}
+    <h3>Advice</h3>${advice ? `<ul class="ai-advice">${advice}</ul>` : `<p>No action needed.</p>`}
+    ${meta}`;
+}
+
+async function runAi() {
+  const btn = $("ai-btn"), started = performance.now();
+  btn.disabled = true;
+  const tick = () => $("ai-out").innerHTML =
+    `<p class="muted small"><span class="spinner"></span>Analysing ${state.hours} h of readings… ${((performance.now() - started) / 1000).toFixed(0)} s</p>`;
+  tick();
+  const timer = setInterval(tick, 1000);
+  try {
+    const r = await api("/api/insights", {
+      hours: state.hours, include_test: state.includeTest,
+      tz_offset_min: -new Date().getTimezoneOffset(),
+      soil_dry_raw: CONFIG.SOIL_DRY_RAW, soil_wet_raw: CONFIG.SOIL_WET_RAW,
+    }, "POST");
+    renderAi(r, (performance.now() - started) / 1000);
+  } catch (e) {
+    $("ai-out").innerHTML = `<p class="status-bad">⚠ ${esc(e.message)}</p>`;
+  } finally {
+    clearInterval(timer);
+    btn.disabled = false;
+  }
+}
+const updateAiButton = () => $("ai-btn").textContent = `✨ Analyse last ${state.hours} h`;
+$("ai-btn").addEventListener("click", runAi);
+
 // Filters
 $("range").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-hours]");
   if (!btn) return;
   $("range").querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", b === btn));
   state.hours = Number(btn.dataset.hours);
+  updateAiButton();
   loadAll();
 });
 $("include-test").addEventListener("change", (e) => {

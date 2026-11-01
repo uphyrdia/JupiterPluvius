@@ -6,11 +6,14 @@ MCXC444 --UART--> ESP32 --HTTPS insert--> Supabase (readings table)
                                               | read (backend user, RLS)
 Browser <--polls every 5 s-- FastAPI backend --+
         (frontend served by the same backend)
+                                  |
+                                  +-- "AI check-up" button --> DeepSeek API
 ```
 
 - `backend/main.py`: FastAPI. Signs in to Supabase as the read-only backend user, caches the token, and exposes:
   - `GET /api/latest`: newest reading (or `null`)
   - `GET /api/readings?hours=1&after_id=123&include_test=true`: readings in the window (at most 24 h), oldest first. If the window holds more than 1000 readings, they are evenly thinned to 1000. As a safeguard it reads at most the newest 20,000 rows, so if the ESP32 uploads far too often, the oldest part of the window is left out.
+  - `POST /api/insights?hours=24&tz_offset_min=480`: the "AI check-up". It sends the same (up to 1000) readings as CSV, plus a description of the device and some precomputed statistics, to DeepSeek (`deepseek-flash`, low reasoning effort). It returns JSON: `status` (good / attention / urgent), `headline`, `summary` points and `advice` items. It allows at most one call per 15 s, so repeated clicks can't drain the API balance. A 24 h analysis takes about 10–15 s and about 30k tokens.
   - `GET /api/health`
   - `/`: serves `frontend/`
 - `frontend/`: plain HTML/CSS/JS, using Chart.js from a CDN. It needs no build step. Calibration constants (`SOIL_DRY_RAW`, `SOIL_WET_RAW`) and the poll rate are at the top of `frontend/app.js`.
@@ -56,6 +59,7 @@ One Render **Web Service** runs the backend and serves the frontend. Because the
    | `SUPABASE_PUBLISHABLE_KEY` | the `sb_publishable_...` key |
    | `BACKEND_EMAIL` | backend user's email |
    | `BACKEND_PASSWORD` | backend user's password |
+   | `DEEPSEEK_API_KEY` | DeepSeek API key (optional; without it, only the AI check-up button fails) |
    | `PYTHON_VERSION` | `3.11.9` (optional, pins Python) |
 5. Click **Deploy**. When the deploy finishes, open `https://<your-service>.onrender.com`. `/api/health` should return `{"ok": true}`.
 
