@@ -1,4 +1,4 @@
-"""AquaWatch backend.
+"""JupiterPluvius backend.
 
 A thin read-only layer between the dashboard and Supabase:
   - signs in to Supabase as the "backend" user (who has SELECT permission via RLS)
@@ -29,10 +29,11 @@ BACKEND_EMAIL = os.environ["BACKEND_EMAIL"]
 BACKEND_PASSWORD = os.environ["BACKEND_PASSWORD"]
 
 MAX_ROWS = 1000   # Supabase's default max rows per request
+MAX_PAGES = 20    # safety cap: at most 20,000 rows (~20 MB in memory) per request
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
-app = FastAPI(title="AquaWatch API")
+app = FastAPI(title="JupiterPluvius API")
 # Allows the frontend to be hosted elsewhere (e.g. a Render Static Site) too.
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"])
 
@@ -97,27 +98,42 @@ async def latest(device_id: str | None = None, include_test: bool = True):
 
 @app.get("/api/readings")
 async def readings(
-    hours: float = Query(1, gt=0, le=24 * 31),
+    hours: float = Query(1, gt=0, le=24),
     after_id: int | None = None,
     device_id: str | None = None,
     include_test: bool = True,
 ):
-    """The newest (up to 1000) readings from the last `hours`, oldest first.
+    """Readings from the last `hours` (at most 24), oldest first.
 
     `after_id` returns only rows newer than that id (used by the frontend's polling).
-    If the window holds more than 1000 readings, only the most recent 1000 are returned.
+    Supabase returns at most 1000 rows per request, so the window is fetched page by page,
+    newest first. At most MAX_PAGES pages are fetched: if the ESP32 uploads far too often,
+    the oldest part of the window is dropped instead of exhausting the server's memory.
+    If more than 1000 readings remain, they are evenly thinned to 1000.
     """
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
     params = base_filters(device_id, include_test) | {
         "created_at": f"gte.{since.isoformat()}",
-        "order": "id.desc",  # newest first, so the limit cuts off the oldest rows
+        "order": "id.desc",
         "limit": str(MAX_ROWS),
     }
-    if after_id is not None:
-        params["id"] = f"gt.{after_id}"
+    id_filters = [f"gt.{after_id}"] if after_id is not None else []
 
-    rows = await select_readings(params)
+    rows: list[dict] = []
+    for _ in range(MAX_PAGES):  # 24 h at one reading per 30 s is only 3 pages
+        # Continue below the oldest id so far (not by offset, which shifts as new rows arrive).
+        page_filters = id_filters + ([f"lt.{rows[-1]['id']}"] if rows else [])
+        page = await select_readings(params | ({"id": page_filters} if page_filters else {}))
+        rows.extend(page)
+        if len(page) < MAX_ROWS:
+            break
     rows.reverse()  # the frontend expects oldest first
+
+    if len(rows) > MAX_ROWS:
+        step = len(rows) / MAX_ROWS
+        newest = rows[-1]
+        rows = [rows[int(i * step)] for i in range(MAX_ROWS)]
+        rows[-1] = newest  # always keep the latest reading
     return rows
 
 

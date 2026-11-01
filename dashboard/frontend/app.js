@@ -2,7 +2,7 @@
 // Settings — tweak these to match your hardware.
 // ---------------------------------------------------------------------------
 const CONFIG = {
-  API_BASE: "",          // "" = same server that serves this page; or e.g. "https://aquawatch-api.onrender.com"
+  API_BASE: "",          // "" = same server that serves this page; or e.g. "https://jupiterpluvius-api.onrender.com"
   SOIL_DRY_RAW: 1900,    // soil ADC reading in dry air        -> 0 %
   SOIL_WET_RAW: 1200,    // soil ADC reading in a wet tissue   -> 100 %
   POLL_MS: 5000,         // how often to check for new readings

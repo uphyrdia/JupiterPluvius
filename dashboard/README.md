@@ -1,4 +1,4 @@
-# AquaWatch dashboard
+# JupiterPluvius dashboard
 
 ```
 MCXC444 --UART--> ESP32 --HTTPS insert--> Supabase (readings table)
@@ -10,7 +10,7 @@ Browser <--polls every 5 s-- FastAPI backend --+
 
 - `backend/main.py`: FastAPI. Signs in to Supabase as the read-only backend user, caches the token, and exposes:
   - `GET /api/latest`: newest reading (or `null`)
-  - `GET /api/readings?hours=1&after_id=123&include_test=true`: readings in the window, oldest first. At most the newest 1000 are returned (Supabase's per-request limit).
+  - `GET /api/readings?hours=1&after_id=123&include_test=true`: readings in the window (at most 24 h), oldest first. If the window holds more than 1000 readings, they are evenly thinned to 1000. As a safeguard it reads at most the newest 20,000 rows, so if the ESP32 uploads far too often, the oldest part of the window is left out.
   - `GET /api/health`
   - `/`: serves `frontend/`
 - `frontend/`: plain HTML/CSS/JS, using Chart.js from a CDN. It needs no build step. Calibration constants (`SOIL_DRY_RAW`, `SOIL_WET_RAW`) and the poll rate are at the top of `frontend/app.js`.
@@ -67,5 +67,5 @@ No data is lost, because the ESP32 writes to Supabase directly and doesn't go th
 ### Optional: frontend as a separate Static Site
 
 If you'd rather host `frontend/` separately (Render **Static Site**, publish directory `dashboard/frontend`, no build command), set
-`API_BASE` at the top of `frontend/app.js` to the backend URL, for example `https://aquawatch-api.onrender.com`. The backend already allows
+`API_BASE` at the top of `frontend/app.js` to the backend URL, for example `https://jupiterpluvius-api.onrender.com`. The backend already allows
 cross-origin GET requests.
