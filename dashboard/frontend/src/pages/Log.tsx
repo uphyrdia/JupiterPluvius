@@ -1,0 +1,57 @@
+import type { MotionValue } from "motion/react";
+import { useMemo, type CSSProperties } from "react";
+import { ReadingsTable } from "../charts/ReadingsTable";
+import { StatesTimeline } from "../charts/StatesTimeline";
+import { PageFrame } from "../components/PageFrame";
+import { PageHeader } from "../components/PageHeader";
+import type { Telemetry } from "../hooks/useTelemetry";
+import { gapMs } from "../lib/series";
+
+interface Props {
+  telemetry: Telemetry;
+  hours: number;
+  progress: MotionValue<number>;
+  active: boolean;
+}
+
+const RECENT = 20;
+const d = (delay: number) => ({ "--d": delay }) as CSSProperties;
+
+/** Page 4: on/off states over time, and the latest readings as a table. */
+export function Log({ telemetry, hours, progress, active }: Props) {
+  const { rows, updatedAt } = telemetry;
+  const recent = useMemo(() => rows.slice(-RECENT).reverse(), [rows]);
+  const gap = useMemo(() => gapMs(rows), [rows]);
+
+  return (
+    <PageFrame index={3} id="log" progress={progress} active={active}>
+      <div className="lg">
+        <PageHeader n={4} id="log" title="Log" kicker="States over time · recent readings" active={active} />
+
+        <section className="panel lg-panel reveal" style={d(0.1)} aria-labelledby="states-title">
+          <header className="panel-head">
+            <span className="tag">TL·01</span>
+            <h3 id="states-title">States over time</h3>
+            <span className="micro">Last {hours} h · hover a band for its times · share of readings on the right</span>
+          </header>
+          <StatesTimeline rows={rows} x0={updatedAt - hours * 3600e3} x1={updatedAt} gap={gap} />
+        </section>
+
+        <section className="panel lg-panel reveal" style={d(0.18)} aria-labelledby="table-title">
+          <header className="panel-head">
+            <span className="tag">TB·01</span>
+            <h3 id="table-title">Recent readings</h3>
+            <span className="micro">
+              Newest first · {recent.length} of {rows.length}
+            </span>
+          </header>
+          <ReadingsTable rows={recent} />
+        </section>
+
+        <p className="lg-end micro reveal" style={d(0.26)}>
+          <i aria-hidden="true" /> End of transmission · JupiterPluvius · CG2271
+        </p>
+      </div>
+    </PageFrame>
+  );
+}

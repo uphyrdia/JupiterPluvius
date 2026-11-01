@@ -4,7 +4,7 @@ A thin read-only layer between the dashboard and Supabase:
   - signs in to Supabase as the "backend" user (who has SELECT permission via RLS)
   - exposes two JSON endpoints the frontend polls
   - offers an "AI check-up" that asks DeepSeek to summarise recent readings
-  - serves the static frontend from ../frontend
+  - serves the built React frontend from ../frontend/dist (`npm run build` creates it)
 
 The ESP32 writes to Supabase directly; this server never writes anything.
 """
@@ -20,6 +20,7 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 # convenience for local dev, Render uses an "Environment" tab
@@ -39,11 +40,30 @@ DEEPSEEK_MODEL = "deepseek-flash"                  # DeepSeek-V4.1-Flash
 AI_COOLDOWN_S = 15         # at most one AI call per 15 s, so button mashing can't drain the balance
 PUMP_THRESHOLD_RAW = 1200  # keep in sync with MOISTURE_THRESHOLD in MCXC444/source/main.c
 
-FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
 app = FastAPI(title="JupiterPluvius API")
 # Allows the frontend to be hosted elsewhere (e.g. a Render Static Site) too.
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"], allow_headers=["*"])
+# Compress responses: the 3D library shrinks from ~700 kB to ~180 kB, 1000 readings to ~30 kB.
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+
+@app.middleware("http")
+async def cache_headers(request, call_next):
+    """Tell browsers how long they may reuse the page files.
+
+    The build puts a hash of each file's content in its name (assets/index-3f9a1c.js), so a file
+    under /assets/ never changes and can be cached for good. index.html must be re-checked on every
+    load (a cheap 304 if unchanged), so a redeploy is picked up right away.
+    """
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/assets/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif not path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 # an HTTP client to fetch data from Supabase
 supabase = httpx.AsyncClient(base_url=SUPABASE_URL, headers={"apikey": SUPABASE_KEY}, timeout=15)
@@ -163,6 +183,8 @@ despite the pump (check reservoir, pump, tubing, sensor); the soil stays soaked 
 poor drainage); temperature or humidity uncomfortable for a typical houseplant; the device offline;
 sensor faults or implausible values (soil_raw near 0 or 4095, sudden jumps).
 If everything looks fine, say so and give little or no advice.
+Test data is not real: if some or all readings are test data, say so, and base plant-care advice
+only on the real readings (give none if there are no real readings).
 Times are the owner's local time; quote them as given.
 Reply with a JSON object only, in exactly this shape:
 {"status": "good" | "attention" | "urgent",
@@ -189,6 +211,8 @@ How the device works:
 - reservoir_ok = 0 means the water reservoir feeding the pump is low: the pump cannot water the
   plant until the owner refills it.
 - faults lists error codes reported by the device, if any.
+- test_data = 1 marks a row inserted while testing the system (by hand or by the ESP32's demo
+  mode): its values are made up, not measurements of the plant.
 {AI_RULES}"""
 
 
@@ -225,9 +249,10 @@ def ai_prompt(rows: list[dict], hours: float, tz: timezone, dry: int, wet: int) 
         f"- readings with reservoir low: {count('reservoir_state', False)}; dark: {count('light_state', False)};"
         f" grow LED on: {count('led_state', True)}",
         f"- faults seen: {', '.join(faults) or 'none'}",
+        f"- test readings (made up, not real measurements): {count('test_data', True)} of {len(rows)}",
         "",
         "Readings, oldest first (CSV):",
-        "time,soil_raw,moisture_pct,temp_c,humidity_pct,light_bright,led_on,reservoir_ok,faults",
+        "time,soil_raw,moisture_pct,temp_c,humidity_pct,light_bright,led_on,reservoir_ok,faults,test_data",
     ]
     for r, m in zip(rows, moist):
         lines.append(",".join(str(x) for x in [
@@ -238,6 +263,7 @@ def ai_prompt(rows: list[dict], hours: float, tz: timezone, dry: int, wet: int) 
             r["humidity"] if r["humidity"] is not None else "",
             flag(r["light_state"]), flag(r["led_state"]), flag(r["reservoir_state"]),
             "|".join(r.get("faults") or []),
+            flag(r.get("test_data")),
         ]))
     return "\n".join(lines)
 
@@ -298,5 +324,6 @@ async def close_client():
 
 
 # Mounted last so /api/* routes take priority. html=True serves index.html at "/".
+# (No dist folder yet? Run `npm run build` in ../frontend, or use `npm run dev` while developing.)
 if FRONTEND_DIR.is_dir():
     app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
