@@ -65,10 +65,11 @@ static void recvTask(void *p)
 	for (;;) {
 		static TMessage msg;
 		while (xQueueReceive(queue, (void *)&msg, portMAX_DELAY) != pdTRUE) {}
+		if (!UART2_Decode(&msg)) continue;
 		/*
-		 * Expected format:
-		 *   "TEMP:22.1,HUM:53.5,LIGHT_ADC:586\n"
-		 * Each field is optional; values default to 0 when absent.
+		 * Payload after frame/CRC validation:
+		 *   "TEMP:22.1,HUM:53.5,LIGHT_ADC:586"
+		 * Missing fields retain their previous values.
 		 */
 		char *field = NULL;
 
@@ -107,7 +108,7 @@ static void sendTask(void *p)
 	for (;;) {
 		static TMessage msg;
 		snprintf(msg.message, MAX_MSG_LEN,
-				"SOIL:%u,WATER:%d,PUMP:%d,ALARM:%d,LED:%d\n",
+				"SOIL:%u,WATER:%d,PUMP:%d,ALARM:%d,LED:%d",
 				moisture, reservoir_level_ok, pumping, alarming, lighting);
 		UART2_Send(&msg);
 		vTaskDelay(pdMS_TO_TICKS(SEND_INTERVAL_MS));
