@@ -56,6 +56,16 @@
   height: 100vh;
   height: 100dvh;
   min-height: 620px;
+  /* Right edge of the text column on the left (dossier, event feed) */
+  --column-end: min(21vw, var(--pad-x) + 280px);
+  /* The furthest left the infinity ever reaches. This mirrors the overview pose in scene/poses.ts (centre
+     12vw right of the middle, radius min(23.5vw, 43vh)): with the band's width, the rocking and the
+     perspective, its outermost slats reach 1.25 radii left of the centre. Change both together. */
+  --ribbon-left: calc(62vw - 1.25 * min(23.5vw, 43vh));
+  /* The moisture card sits just clear of the infinity, but never over the text column. On narrower
+     screens there's no room, so it overlaps the infinity's left loop a little. */
+  --hero-w: clamp(300px, 24vw, 390px);
+  --hero-x: max(var(--column-end) + 24px, min(22.5vw, var(--ribbon-left) - var(--hero-w) - 16px));
 }
 .ov-brand {
   position: absolute;
@@ -93,7 +103,7 @@
 .ov-feed {
   position: absolute;
   left: var(--pad-x);
-  width: min(calc(21vw - var(--pad-x)), 280px);
+  width: calc(var(--column-end) - var(--pad-x));
   display: grid;
   gap: 10px;
   justify-items: start;
@@ -132,17 +142,17 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 30.5vw;
+  left: calc(var(--hero-x) + 8vw); /* moves with the card */
   width: 1px;
   background: color-mix(in srgb, var(--ink) 55%, transparent);
 }
 
-/* The black moisture card that sits over the infinity's left loop */
+/* The black moisture card, just left of the infinity */
 .hero {
   position: absolute;
   top: 35vh;
-  left: 22.5vw;
-  width: clamp(300px, 24vw, 390px);
+  left: var(--hero-x);
+  width: var(--hero-w);
 }
 .hero-tab {
   display: inline-block;
