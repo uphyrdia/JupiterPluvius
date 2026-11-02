@@ -35,7 +35,8 @@ export function poses(vw: number, vh: number, compact: boolean): Pose[] {
   }
   return [
     // 01 Overview: the infinity, centre-right, rocking slowly and breathing.
-    // pages.css (--ribbon-left) keeps the moisture card clear of it: update that if you move or resize this.
+    // pages.css (--ribbon-left, --ribbon-right) keeps the moisture card and the light callout clear of it:
+    // update those if you move or resize this.
     { center: [0.12 * vw, -0.02 * vh, 0], tilt: [-0.42, 0.3, -0.05], sway: [0.07, 0.16, 0.03], spin: 0,
       scale: Math.min(0.235 * vw, 0.43 * vh), shape: 0, band: 0.3, depth: 0.09, twist: 0.5, flow: 0.12, breath: 1, ghost: 0 },
     // 02 Trends: swept into the top-right corner, a big twisting fan turning around the corner

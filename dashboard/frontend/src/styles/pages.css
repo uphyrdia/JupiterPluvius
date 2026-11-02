@@ -58,10 +58,12 @@
   min-height: 620px;
   /* Right edge of the text column on the left (dossier, event feed) */
   --column-end: min(21vw, var(--pad-x) + 280px);
-  /* The furthest left the infinity ever reaches. This mirrors the overview pose in scene/poses.ts (centre
-     12vw right of the middle, radius min(23.5vw, 43vh)): with the band's width, the rocking and the
-     perspective, its outermost slats reach 1.25 radii left of the centre. Change both together. */
+  /* How far the infinity ever reaches: left, and right at the light callout's height. These mirror the
+     overview pose in scene/poses.ts (centre 12vw right of the middle, radius min(23.5vw, 43vh)): with the
+     band's width, the rocking and the perspective, its outermost slats reach 1.25 radii left of the centre
+     and 1.18 radii right. Update them if you move or resize it there. */
   --ribbon-left: calc(62vw - 1.25 * min(23.5vw, 43vh));
+  --ribbon-right: calc(62vw + 1.18 * min(23.5vw, 43vh));
   /* The moisture card sits just clear of the infinity, but never over the text column. On narrower
      screens there's no room, so it overlaps the infinity's left loop a little. */
   --hero-w: clamp(300px, 24vw, 390px);
@@ -301,7 +303,9 @@
 }
 .callout-temp { top: 6vh; left: 38vw; }
 .callout-humidity { top: 7vh; left: 67vw; }
-.callout-light { top: 62vh; left: 84vw; }
+/* Just clear of the infinity's right loop (24px leaves its pin 8px clear), but never past the right margin
+   (the callout is about 130px wide): on narrower screens there's no room, so it overlaps the loop a little. */
+.callout-light { top: 62vh; left: min(100% - var(--pad-x) - 130px, max(84vw, var(--ribbon-right) + 24px)); }
 .callout-reservoir { top: 81vh; left: 55vw; }
 .callout-faults { top: 81vh; left: 35vw; }
 
