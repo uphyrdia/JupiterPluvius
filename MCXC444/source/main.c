@@ -184,6 +184,12 @@ static void water_level_sensor_task(void *p)
 {
 //	static TMessage msg;
 
+    if (above_threshold) {
+        offBuzzer();
+    } else {
+        onBuzzer();
+    }
+
 	// Send initial state
 //	snprintf(msg.message, MAX_MSG_LEN, "WATER:%d\n", above_threshold);
 //	UART2_Send(&msg);
@@ -194,9 +200,11 @@ static void water_level_sensor_task(void *p)
 //		snprintf(msg.message, MAX_MSG_LEN, "WATER:%d\n", above_threshold);
 //		UART2_Send(&msg);
 
-		if (!above_threshold) {
-			// set buzzer active to notify the user
-		}
+        if (above_threshold) {
+            offBuzzer();
+        } else {
+            onBuzzer();
+        }
 
 		if (xSemaphoreTake(print_mutex, portMAX_DELAY) == pdTRUE) {
 			PRINTF("Water Level: %d\r\n", above_threshold);
@@ -219,6 +227,7 @@ int main(void)
     /* Init FSL debug console. */
     BOARD_InitDebugConsole();
 #endif
+    PRINTF("MCXC444 is running\r\n");
 
 	queue = xQueueCreate(QLEN, sizeof(TMessage));
 
@@ -233,6 +242,7 @@ int main(void)
 
 	initLED();
 	initPump();
+	initBuzzer();
 	ComparatorInterrupt_Init();
 	initADC();
 	initUART2();
@@ -258,5 +268,6 @@ int main(void)
             tight while() loop */
         __asm volatile ("nop");
     }
+
     return 0 ;
 }

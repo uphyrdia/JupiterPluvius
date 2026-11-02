@@ -1,16 +1,17 @@
 #ifndef GPIO_H_
 #define GPIO_H_
 
-#define RED_PIN		31	// PTE31
-#define GREEN_PIN	5	// PTD5
-#define BLUE_PIN	29	// PTE29
 #define PUMP_PIN 	30  // PTE30
-
+#define BUZZER_PIN 13 // PTA13
+#define EXTERNAL_LED_PIN 5 // PTA5
 void initLED(void);
 void initPump(void);
 void onLED(void);
 void offLED(void);
 void onPump(void);
 void offPump(void);
+void initBuzzer(void);
+void onBuzzer(void);
+void offBuzzer(void);
 
 #endif /* GPIO_H_ */
