@@ -6,8 +6,7 @@
 #define BLUE_PIN	29	// PTE29
 #define PUMP_PIN 	30  // PTE30
 
-void initLED(void);
-void initPump(void);
+void initGPIO(void);
 void onLED(void);
 void offLED(void);
 void onPump(void);

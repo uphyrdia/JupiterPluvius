@@ -1,8 +1,6 @@
 #ifndef PWM_H_
 #define PWM_H_
 
-#include <stdint.h>
-
 void setMCGIRClk(void);
 void setTPMClock(void);
 void initPWM(void);

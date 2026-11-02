@@ -1,13 +1,14 @@
-/*
- * uart.c
- *
- * UART2 link to the ESP32: initialization and receive interrupt.
- */
-
 #include <string.h>
+#include <stdint.h>
 
+#include "fsl_common.h"
 #include "fsl_clock.h"
 
+#include "FreeRTOS.h"
+#include "queue.h"
+#include "semphr.h"
+
+#include "shared.h"
 #include "uart.h"
 
 /* Configure UART2 on PTE22 (TX) / PTE23 (RX) and enable its RX interrupt. */
