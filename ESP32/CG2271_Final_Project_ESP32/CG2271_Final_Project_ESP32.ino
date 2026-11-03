@@ -52,7 +52,6 @@ const unsigned long DHT_INTERVAL_MS   = 3000;
 const unsigned long LIGHT_INTERVAL_MS = 1000;
 const unsigned long UART_INTERVAL_MS  = 5000;
 const unsigned long API_INTERVAL_MS   = 5000;
-const unsigned long WIFI_RETRY_MS     = 10000;
 const unsigned long SENSOR_MAX_AGE_MS = 10000;
 const unsigned long MCU_MAX_AGE_MS    = 15000;
 
@@ -102,7 +101,6 @@ unsigned long lastDHTPoll = 0;
 unsigned long lastLightPoll = 0;
 unsigned long lastUARTSend = 0;
 unsigned long lastAPISend = 0;
-unsigned long lastWiFiAttempt = 0;
 bool wifiWasConnected = false;
 
 extern const char ROOT_CA_CERTIFICATES[];
@@ -346,12 +344,11 @@ void manageWiFi() {
     return;
   }
 
-  wifiWasConnected = false;
-  if (millis() - lastWiFiAttempt >= WIFI_RETRY_MS) {
-    lastWiFiAttempt = millis();
-    Serial.println("[WiFi] Reconnecting...");
-    WiFi.reconnect();
+  if (wifiWasConnected) {
+    wifiWasConnected = false;
+    Serial.println("[WiFi] Connection lost; automatic reconnection enabled");
   }
+  // Let auto-reconnect finish its attempt; a manual reconnect can overlap it.
 }
 
 int postJson(const String& path, const String& body,
@@ -509,10 +506,13 @@ void setup() {
   Serial.println("[UART] Serial1 ready, 9600 8N1");
 
   // Wi-Fi credentials and Supabase authentication follow dashboard/as4/as4.ino.
+  WiFi.onEvent([](WiFiEvent_t, WiFiEventInfo_t info) {
+    Serial.printf("[WiFi] Disconnected, reason: %u\n",
+                  (unsigned int)info.wifi_sta_disconnected.reason);
+  }, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  lastWiFiAttempt = millis();
   Serial.print("[WiFi] Connecting to ");
   Serial.println(WIFI_SSID);
 
