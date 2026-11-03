@@ -3,7 +3,7 @@
 
 #include "adc.h"
 
-void initADC(void)
+void initADC0(void)
 {
 	SIM->SCGC5 |= SIM_SCGC5_PORTB_MASK;
 	SIM->SCGC6 |= SIM_SCGC6_ADC0_MASK;
@@ -59,4 +59,14 @@ void initADC(void)
 	NVIC_SetPriority(ADC0_IRQn, 3); // Lowest priority on Cortex-M0+
 	NVIC_ClearPendingIRQ(ADC0_IRQn);
 	NVIC_EnableIRQ(ADC0_IRQn);
+}
+
+unsigned int poll_soil_adc(void)
+{
+	// In software-trigger mode, writing SC1A both selects the channel
+	// and begins the conversion.
+	// AIEN = 0: this conversion is polled, with no ADC interrupt.
+	ADC0->SC1[0] = ADC_SC1_ADCH(SOIL_ADC_CHANNEL);
+	while (!(ADC0->SC1[0] & ADC_SC1_COCO_MASK)) {}
+	return ADC0->R[0];
 }

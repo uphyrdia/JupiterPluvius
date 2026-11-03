@@ -1,7 +1,4 @@
-/*
- * pwm.c
- *
- */
+#include <stdint.h>
 
 #include "fsl_common.h"
 #include "fsl_port.h"

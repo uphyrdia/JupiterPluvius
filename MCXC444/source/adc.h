@@ -6,6 +6,7 @@
 #define SOIL_ADC_CHANNEL 12U
 
 /* Configure and calibrate ADC0 for polled, software-triggered conversions. */
-void initADC(void);
+void initADC0(void);
+unsigned int poll_soil_adc(void);
 
 #endif /* ADC_H_ */

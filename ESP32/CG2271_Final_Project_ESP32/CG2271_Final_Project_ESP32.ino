@@ -37,12 +37,12 @@ unsigned long lastLightRead = 0;
 unsigned long lastUARTSend = 0;
 
 //UART receive buffer
-const size_t RX_BUFFER_SIZE = 128;
+// Match the MCXC444 frame limit, including the terminating NUL.
+const size_t RX_BUFFER_SIZE = 256;
 
 char rxBuffer[RX_BUFFER_SIZE];
 
 size_t rxIndex = 0;
-bool discardPacket = false;
 
 //DHT11 reading
 void readDHT11()
@@ -127,6 +127,49 @@ void readLightSensor()
     Serial.println("--------------------------");
 }
 
+/* CRC-16/CCITT-FALSE: polynomial 0x1021, initial value 0xFFFF,
+ * no reflection, no final XOR. Covers DATA|payload only. */
+static uint16_t packetCRC(const char *data, size_t length)
+{
+	uint16_t crc = 0xFFFFU;
+	for (size_t i = 0; i < length; i++) {
+		crc ^= (uint16_t)(uint8_t)data[i] << 8;
+		for (unsigned int bit = 0; bit < 8; bit++)
+			crc = (crc & 0x8000U) ? (uint16_t)((crc << 1) ^ 0x1021U)
+			                      : (uint16_t)(crc << 1);
+	}
+	return crc;
+}
+
+// Validate the frame and replace it with the plain payload.
+bool decodePacket(char *message)
+{
+	size_t length = strlen(message);
+	if (length < 13U || strncmp(message, "@DATA|", 6) != 0 ||
+	    message[length - 1] != '\n') return false;
+
+	char *end = strchr(message + 6, '*');
+	if (end != message + length - 6U ||
+	    strpbrk(message + 6, "@\r") != NULL) return false;
+
+	uint16_t received_crc = 0U;
+	for (unsigned int i = 1; i <= 4; i++) {
+		char c = end[i];
+		unsigned int digit;
+		if (c >= '0' && c <= '9') digit = (unsigned int)(c - '0');
+		else if (c >= 'A' && c <= 'F') digit = (unsigned int)(c - 'A' + 10);
+		else if (c >= 'a' && c <= 'f') digit = (unsigned int)(c - 'a' + 10);
+		else return false;
+		received_crc = (uint16_t)((received_crc << 4) | digit);
+	}
+	if (received_crc != packetCRC(message + 1,
+	                             (size_t)(end - message - 1))) return false;
+
+	*end = '\0';
+	memmove(message, message + 6, (size_t)(end - message - 6) + 1U);
+	return true;
+}
+
 //UART Transmission
 void sendSensorData()
 {
@@ -139,146 +182,110 @@ void sendSensorData()
         return;
     }
 
-    char message[128];
+    char message[RX_BUFFER_SIZE];
 
-    // Raw environmental sensor packet:
-    // TEMP:22.5,HUM:53.1,LIGHT_ADC:512
+    // Same framing as MCXC444: @DATA|payload*HHHH\n.
+    // CRC covers DATA|payload, excluding @, *, CRC digits and newline.
 
     int length = snprintf(
         message,
         sizeof(message),
-        "TEMP:%.1f,HUM:%.1f,LIGHT_ADC:%d",
+        "@DATA|TEMP:%.1f,HUM:%.1f,LIGHT_ADC:%d",
         temperature,
         humidity,
         lightADC
     );
 
     if (length < 0 ||
-        length >= (int)sizeof(message))
+        (size_t)length + 7U > sizeof(message))
     {
         Serial.println("[UART TX] Packet error");
         return;
     }
 
-    // Send packet to MCXC444
-    // Newline marks end of packet
+    uint16_t crc = packetCRC(message + 1, (size_t)length - 1U);
+    snprintf(message + length, sizeof(message) - (size_t)length,
+             "*%04X\n", (unsigned int)crc);
+    length += 6; // *HHHH and the newline.
+
+    // Send the complete frame, including its single terminating newline.
     Serial1.write(
         (const uint8_t *)message,
         length
     );
 
-    Serial1.write('\n');
-
     // Debug output
     Serial.println();
     Serial.print("[UART TX -> MCXC444] ");
-    Serial.println(message);
+    Serial.print(message);
 }
 
-/*
-//Process received UART
-void processUARTMessage(const char *message)
+// Process a complete frame only after validating its type and CRC.
+void processUARTMessage(char *message)
 {
-    Serial.println();
+    if (!decodePacket(message))
+    {
+        Serial.println("[UART RX] Invalid frame or CRC");
+        return;
+    }
 
+    // SOIL is raw ADC; WATER is 1 when the reservoir level is OK.
+    unsigned int soil;
+    int water, pump, alarm, led;
+    int consumed = 0;
+    int parsed = sscanf(message,
+        "SOIL:%u,WATER:%d,PUMP:%d,ALARM:%d,LED:%d%n",
+        &soil, &water, &pump, &alarm, &led, &consumed);
+
+    if (parsed != 5 || message[consumed] != '\0')
+    {
+        Serial.println("[UART RX] Invalid status payload");
+        return;
+    }
+
+    Serial.println();
     Serial.print("[UART RX <- MCXC444] ");
     Serial.println(message);
-
-    // Expected MCXC444 status packet:
-    // SOIL:22,WATER:80,VALVE:1,ALARM:0
-
-    float soil;
-    float water;
-    int valve;
-    int alarm;
-
-    int parsed = sscanf(
-        message,
-        "SOIL:%f,WATER:%f,VALVE:%d,ALARM:%d",
-        &soil,
-        &water,
-        &valve,
-        &alarm
-    );
-
-    if (parsed == 4)
-    {
-        Serial.println("---- MCXC444 STATUS ----");
-
-        Serial.print("Soil moisture: ");
-        Serial.print(soil, 1);
-        Serial.println(" %");
-
-        Serial.print("Water level: ");
-        Serial.print(water, 1);
-        Serial.println(" %");
-
-        Serial.print("Valve: ");
-        Serial.println(valve ? "OPEN" : "CLOSED");
-
-        Serial.print("Alarm: ");
-        Serial.println(alarm ? "ON" : "OFF");
-
-        Serial.println("-----------------------");
-    }
-    else if (strcmp(message, "ACK") == 0)
-    {
-        Serial.println("[UART] ACK received");
-    }
-    else
-    {
-        Serial.println("[UART] Message received");
-    }
+    Serial.println("---- MCXC444 STATUS ----");
+    Serial.print("Soil moisture ADC: ");
+    Serial.println(soil);
+    Serial.print("Reservoir: ");
+    Serial.println(water ? "OK" : "LOW");
+    Serial.print("Pump: ");
+    Serial.println(pump ? "ON" : "OFF");
+    Serial.print("Alarm: ");
+    Serial.println(alarm ? "ON" : "OFF");
+    Serial.print("LED: ");
+    Serial.println(led ? "ON" : "OFF");
+    Serial.println("-----------------------");
 }
-*/ 
 
-/*
-//UART Reception
+// Collect @...\n frames. A new @ restarts an incomplete frame.
 void receiveUART()
 {
     while (Serial1.available() > 0)
     {
         char c = (char)Serial1.read();
 
+        if (c == '@') rxIndex = 0;
+        else if (rxIndex == 0) continue;
+
+        if (rxIndex >= RX_BUFFER_SIZE - 1)
+        {
+            rxIndex = 0;
+            Serial.println("[UART RX] Buffer overflow");
+            continue;
+        }
+
+        rxBuffer[rxIndex++] = c;
         if (c == '\n')
         {
-            if (!discardPacket)
-            {
-                rxBuffer[rxIndex] = '\0';
-
-                if (rxIndex > 0)
-                {
-                    processUARTMessage(rxBuffer);
-                }
-            }
-
+            rxBuffer[rxIndex] = '\0';
             rxIndex = 0;
-            discardPacket = false;
-        }
-        else if (c == '\r')
-        {
-            // Ignore carriage return
-        }
-        else if (discardPacket)
-        {
-            // Ignore bytes until next newline
-        }
-        else if (rxIndex < RX_BUFFER_SIZE - 1)
-        {
-            rxBuffer[rxIndex++] = c;
-        }
-        else
-        {
-            rxIndex = 0;
-            discardPacket = true;
-
-            Serial.println(
-                "[UART RX] Buffer overflow"
-            );
+            processUARTMessage(rxBuffer);
         }
     }
 }
-*/
 
 void setup()
 {
@@ -339,7 +346,7 @@ void loop()
 {
     unsigned long now = millis();
 
-    //receiveUART();
+    receiveUART();
 
     //Read DHT every 3 seconds
     if (now - lastDHTRead >= DHT_INTERVAL)

@@ -28,49 +28,51 @@
 #include "shared.h"
 #include "gpio.h"
 #include "adc.h"
-#include "comparator.h"
+#include "cmp.h"
 #include "pwm.h"
 #include "uart.h"
 
 #define QLEN	5
 
 #define LIGHT_ADC_THRESHOLD		20
-#define MOISTURE_THRESHOLD 		1200
+/* Higher ADC values mean drier soil. */
+#define SOIL_MOISTURE_ADC_THRESHOLD    	1200U
+
+#define SOIL_MOISTURE_SAMPLING_PERIOD	 500U
+#define SEND_INTERVAL_MS				1000U
+#define PUMP_COOLDOWN_MS               60000U
 
 QueueHandle_t queue;
 SemaphoreHandle_t led_sema;
 SemaphoreHandle_t pump_sema;
-SemaphoreHandle_t water_level_sema;
+SemaphoreHandle_t reservoir_level_sema;
 SemaphoreHandle_t print_mutex;
 SemaphoreHandle_t uart_sema;
 
 static unsigned int moisture = 2000;
-volatile int above_threshold = 0;
-static int pumping = 0;
-static int alarming = 0;
-static int lighting = 0;
+volatile bool reservoir_level_ok; // initialized in initCMP0()
+
+static bool pumping = false;
+static bool alarming = false;
+static bool lighting = false;
 
 static float temperature = 0.0f;
 static float humidity = 0.0f;
-static int light = 0;
-
-static volatile int needLight = 0;
+static int light_adc = 0;
 
 static void recvTask(void *p)
 {
 	for (;;) {
 		static TMessage msg;
-		int temp_x10;
-		int humid_x10;
+		while (xQueueReceive(queue, (void *)&msg, portMAX_DELAY) != pdTRUE) {}
+		if (!UART2_Decode(&msg)) continue;
+		/*
+		 * Payload after frame/CRC validation:
+		 *   "TEMP:22.1,HUM:53.5,LIGHT_ADC:586"
+		 * Missing fields retain their previous values.
+		 */
 		char *field = NULL;
 
-		while (xQueueReceive(queue, (void *)&msg, portMAX_DELAY) != pdTRUE) {}
-
-		/*
-		 * Expected format:
-		 *   "TEMP:22.1,HUM:53.5,LIGHT_ADC:586\n"
-		 * Each field is optional; values default to 0 when absent.
-		 */
 		field = strstr(msg.message, "TEMP:");
 		if (field != NULL)
 			temperature = strtof(field + 5, NULL);
@@ -81,31 +83,21 @@ static void recvTask(void *p)
 
 		field = strstr(msg.message, "LIGHT_ADC:");
 		if (field != NULL)
-			light = (int)strtol(field + 10, NULL, 10);
+			light_adc = (int)strtol(field + 10, NULL, 10);
 
-		/*
-		 * Control logic
-		 * */
-		if (needLight && light > LIGHT_ADC_THRESHOLD) {
-			needLight = 0;
-			xSemaphoreGive(led_sema);
-		} else if (!needLight && light < LIGHT_ADC_THRESHOLD) {
-			needLight = 1;
-			xSemaphoreGive(led_sema);
+		/* Lighting control logic */
+		if (lighting && light_adc < LIGHT_ADC_THRESHOLD) {
+			offLED();
+			lighting = false;
+		} else if (!lighting && light_adc > LIGHT_ADC_THRESHOLD) {
+			onLED();
+			lighting = true;
 		}
 
-		/* One decimal place, rounded, for printing without float support. */
-		temp_x10 = (int)((temperature * 10.0f) + ((temperature >= 0.0f) ? 0.5f : -0.5f));
-		humid_x10 = (int)((humidity * 10.0f) + ((humidity >= 0.0f) ? 0.5f : -0.5f));
-
-		/* Print the received / parsed message for debugging. */
+		/* Print the parsed readings for debugging. */
 		if (xSemaphoreTake(print_mutex, portMAX_DELAY) == pdTRUE) {
-			PRINTF("Received message: %s\r\n", msg.message);
-			/* PRINTF_FLOAT_ENABLE=0 in this project, so print as integers. */
-			PRINTF("TEMP: %s%d.%d, HUM: %s%d.%d, LIGHT_ADC: %d\r\n",
-			       (temperature < 0.0f) ? "-" : "", abs(temp_x10) / 10, abs(temp_x10) % 10,
-			       (humidity < 0.0f) ? "-" : "", abs(humid_x10) / 10, abs(humid_x10) % 10,
-			       light);
+			PRINTF("Received readings: TEMP:%d,HUM:%d,LIGHT_ADC:%d\r\n",
+					(int)temperature, (int)humidity, light_adc);
 			xSemaphoreGive(print_mutex);
 		}
 	}
@@ -115,102 +107,68 @@ static void sendTask(void *p)
 {
 	for (;;) {
 		static TMessage msg;
-		snprintf(msg.message, MAX_MSG_LEN, "SOIL:%u,WATER:%d,PUMP:%d,ALARM:%d,LED:%d\n",
-				moisture, above_threshold, pumping, alarming, lighting);
+		snprintf(msg.message, MAX_MSG_LEN,
+				"SOIL:%u,WATER:%d,PUMP:%d,ALARM:%d,LED:%d",
+				moisture, reservoir_level_ok, pumping, alarming, lighting);
 		UART2_Send(&msg);
-		vTaskDelay(pdMS_TO_TICKS(500));
-	}
-}
-
-static void ledTask(void *p) // actually no need to make it an infinite loop?
-{
-	for (;;) {
-		while (xSemaphoreTake(led_sema, portMAX_DELAY) != pdTRUE) {}
-		if (needLight) {
-			onLED();
-			lighting = 1;
-		}
-		else
-		{
-			offLED();
-			lighting = 0;
-		}
-
+		vTaskDelay(pdMS_TO_TICKS(SEND_INTERVAL_MS));
 	}
 }
 
 static void pumpTask(void *p)
 {
 	for (;;) {
-		// pump_sema is currently given in soil_moisture_sensor_task
-		// it may instead be given in recvTask after ESP32's consulting with AI
 		while (xSemaphoreTake(pump_sema, portMAX_DELAY) != pdTRUE) {}
+
+		unsigned int duration_ms = 3000U;
+		if (temperature >= 30.0f || humidity <= 45.0f)
+			duration_ms += 1000U;
+
 		onPump();
-		pumping = 1;
-		int duration  = (humidity > 60.0) ? 1000 : 2000;
-		vTaskDelay(pdMS_TO_TICKS(duration));
+		pumping = true;
+		vTaskDelay(pdMS_TO_TICKS(duration_ms));
 		offPump();
-		pumping = 0;
+		pumping = false;
+
+		vTaskDelay(pdMS_TO_TICKS(PUMP_COOLDOWN_MS));
 	}
 }
 
 static void soil_moisture_sensor_task(void *p)
 {
 	for (;;) {
-//		static TMessage msg;
-		// In software-trigger mode, writing SC1A both selects the channel
-		// and begins the conversion.
-		// AIEN = 0: this conversion is polled, with no ADC interrupt.
-		ADC0->SC1[0] = ADC_SC1_ADCH(SOIL_ADC_CHANNEL);
-		while (!(ADC0->SC1[0] & ADC_SC1_COCO_MASK)) {}
-		moisture = ADC0->R[0];
+		moisture = poll_soil_adc();
 
-		if (moisture > MOISTURE_THRESHOLD) // too dry
+		if (moisture > SOIL_MOISTURE_ADC_THRESHOLD)
 			xSemaphoreGive(pump_sema);
 
-//		snprintf(msg.message, MAX_MSG_LEN, "SOIL:%u\n", moisture);
-//		UART2_Send(&msg);
-
-		if (xSemaphoreTake(print_mutex, portMAX_DELAY) == pdTRUE) {
+		if (xSemaphoreTake(print_mutex, portMAX_DELAY) == pdTRUE)
+		{
 			PRINTF("Soil moisture ADC: %u\r\n", moisture); // Raw 0..4095
 			xSemaphoreGive(print_mutex);
 		}
-
-		vTaskDelay(pdMS_TO_TICKS(500));
+		vTaskDelay(pdMS_TO_TICKS(SOIL_MOISTURE_SAMPLING_PERIOD));
 	}
 }
 
 static void water_level_sensor_task(void *p)
 {
-//	static TMessage msg;
-
-    if (above_threshold) {
+    if (reservoir_level_ok)
         offBuzzer();
-    } else {
+    else
         onBuzzer();
-    }
-
-	// Send initial state
-//	snprintf(msg.message, MAX_MSG_LEN, "WATER:%d\n", above_threshold);
-//	UART2_Send(&msg);
-
 	for (;;) {
-		while (xSemaphoreTake(water_level_sema, portMAX_DELAY) != pdTRUE) {}
+		while (xSemaphoreTake(reservoir_level_sema, portMAX_DELAY) != pdTRUE) {}
+		if (reservoir_level_ok)
+			offBuzzer();
+		else
+			onBuzzer();
 
-//		snprintf(msg.message, MAX_MSG_LEN, "WATER:%d\n", above_threshold);
-//		UART2_Send(&msg);
-
-        if (above_threshold) {
-            offBuzzer();
-        } else {
-            onBuzzer();
-        }
-
-		if (xSemaphoreTake(print_mutex, portMAX_DELAY) == pdTRUE) {
-			PRINTF("Water Level: %d\r\n", above_threshold);
+		if (xSemaphoreTake(print_mutex, portMAX_DELAY) == pdTRUE)
+		{
+			PRINTF("Water Level: %d\r\n", reservoir_level_ok);
 			xSemaphoreGive(print_mutex);
 		}
-		vTaskDelay(pdMS_TO_TICKS(1000));
 	}
 }
 
@@ -232,30 +190,25 @@ int main(void)
 	queue = xQueueCreate(QLEN, sizeof(TMessage));
 
 	pump_sema = xSemaphoreCreateBinary(); // initialized to 0
-	led_sema = xSemaphoreCreateBinary();
-	water_level_sema = xSemaphoreCreateBinary();
+	reservoir_level_sema = xSemaphoreCreateBinary();
 	uart_sema = xSemaphoreCreateBinary();
 
 	xSemaphoreGive(uart_sema); // Initialize the UART semaphore to 1.
 
 	print_mutex = xSemaphoreCreateMutex(); // initialized to 1
 
-	initLED();
-	initPump();
-	initBuzzer();
-	ComparatorInterrupt_Init();
-	initADC();
+	initGPIO();
+	initADC0();
+	initCMP0();
 	initUART2();
 
 	PRINTF("CG2271 Project\r\n");
 
-	xTaskCreate(recvTask, "recvTask", configMINIMAL_STACK_SIZE+100, NULL, 4, NULL);
-	xTaskCreate(sendTask, "sendTask", configMINIMAL_STACK_SIZE+100, NULL, 4, NULL);
+	xTaskCreate(recvTask, "recv", configMINIMAL_STACK_SIZE+100, NULL, 4, NULL);
+	xTaskCreate(sendTask, "send", configMINIMAL_STACK_SIZE+100, NULL, 4, NULL);
 	xTaskCreate(soil_moisture_sensor_task, "soil", configMINIMAL_STACK_SIZE+100, NULL, 3, NULL);
 	xTaskCreate(water_level_sensor_task, "water", configMINIMAL_STACK_SIZE+100, NULL, 3, NULL);
 	xTaskCreate(pumpTask, "pump", configMINIMAL_STACK_SIZE+100, NULL, 2, NULL);
-	xTaskCreate(ledTask, "led", configMINIMAL_STACK_SIZE+100, NULL, 2, NULL);
-
 
     vTaskStartScheduler();
 

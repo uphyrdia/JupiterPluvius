@@ -1,1 +1,14 @@
-MCXC444/source/.project
+datasheets/
+
+# Generated build output
+MCXC444/Debug/
+MCXC444/Release/
+MCXC444/*.launch
+
+# Eclipse workspace state, if created here
+MCXC444/.metadata/
+
+# OS-generated files
+MCXC444/Thumbs.db
+MCXC444/Desktop.ini
+MCXC444/.DS_Store
