@@ -1,0 +1,429 @@
+/* ===========================================================================
+   Tokens
+   =========================================================================== */
+:root {
+  --font-sans: "Montserrat Variable", "Montserrat", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  /* Status colours: fixed, and always shown with an icon + label, never alone */
+  --good: #0ca30c;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+
+  /* Chart series */
+  --s-moist: #2b47e6;
+  --s-temp: #eb6834;
+  --s-hum: #1baf7a;
+
+  /* Motion */
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  /* Layout */
+  --pad-x: clamp(20px, 3.2vw, 56px);
+  --top: 92px; /* room for the top bar */
+  --bottom: 76px; /* room for the bottom bar */
+  --rail: 176px; /* room for the section rail on the right */
+
+  /* Theme defaults; App.tsx keeps overriding these as you scroll (see lib/theme.ts) */
+  --bg: #ebeae6;
+  --ink: #141414;
+  --ink-2: #4b4b48;
+  --ink-3: #8b8a85;
+  --rule: rgba(20, 20, 20, 0.16);
+  --panel: rgba(255, 255, 255, 0.46);
+  --accent: #2b47e6;
+  --chip: #141414;
+  --chip-ink: #f4f4f2;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+html,
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+body {
+  background: #ebeae6;
+  color: #141414;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  text-rendering: optimizeLegibility;
+}
+h1, h2, h3, h4, p, ul, ol, dl, dd, figure {
+  margin: 0;
+}
+ul, ol {
+  padding: 0;
+  list-style: none;
+}
+button {
+  font: inherit;
+  color: inherit;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+::selection {
+  background: var(--accent);
+  color: #fff;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ===========================================================================
+   Layers: backdrop < 3D scene < pages < chrome < glitch
+   =========================================================================== */
+.app {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  color: var(--ink);
+  background: var(--bg);
+}
+.backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+.scene {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 1.6s ease;
+}
+.scene.is-ready {
+  opacity: 1;
+}
+.is-still .scene {
+  opacity: 1;
+  transition: none;
+}
+.pages {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+.glitch {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  overflow: hidden;
+  mix-blend-mode: difference; /* white slices invert whatever is underneath */
+}
+
+/* ===========================================================================
+   Backdrop
+   =========================================================================== */
+.bd-paper {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 55% 50% at 62% 50%, rgba(255, 255, 255, 0.8), transparent 72%),
+    radial-gradient(ellipse 95% 85% at 50% 50%, transparent 52%, rgba(110, 108, 100, 0.18) 100%);
+}
+.bd-dots {
+  position: absolute;
+  inset: 0;
+  background-size: 26px 26px;
+  background-position: center;
+  -webkit-mask-image: radial-gradient(ellipse 85% 80% at 50% 50%, #000 35%, transparent 100%);
+  mask-image: radial-gradient(ellipse 85% 80% at 50% 50%, #000 35%, transparent 100%);
+}
+.bd-dots-ink {
+  background-image: radial-gradient(circle, rgba(20, 20, 20, 0.2) 1px, transparent 1.3px);
+}
+.bd-dots-light {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.22) 1px, transparent 1.3px);
+}
+.bd-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 55% 45% at 92% 0%, rgba(176, 104, 190, 0.6), transparent 70%),
+    radial-gradient(ellipse 75% 50% at 50% 110%, rgba(70, 128, 255, 0.55), transparent 70%),
+    radial-gradient(ellipse 50% 70% at -5% 45%, rgba(4, 8, 52, 0.65), transparent 70%);
+}
+.bd-orbit {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.orbit {
+  width: min(120vw, 1560px);
+  height: auto;
+  overflow: visible;
+}
+.orbit line,
+.orbit circle,
+.orbit path {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.45);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.orbit .faint {
+  stroke: rgba(255, 255, 255, 0.24);
+}
+.orbit .bright {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 1.4;
+}
+.orbit .dash {
+  stroke-dasharray: 2 7;
+}
+.orbit .solid {
+  fill: #fff;
+  stroke: none;
+}
+.orbit-spin {
+  transform-box: view-box;
+  transform-origin: 500px 300px;
+  animation: spin 90s linear infinite;
+}
+.orbit-spin.fast {
+  animation-duration: 26s;
+  animation-direction: reverse;
+}
+.backdrop.is-busy .orbit-spin {
+  animation-duration: 7s;
+}
+.backdrop.is-busy .orbit-spin.fast {
+  animation-duration: 2.2s;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.bd-grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.06;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.6 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* ===========================================================================
+   Glitch burst (see GlitchBurst.tsx)
+   =========================================================================== */
+.glitch i {
+  position: absolute;
+  display: block;
+  opacity: 0;
+  background: #fff;
+  animation: glitch-slice 440ms steps(1, end) both;
+}
+.glitch .glitch-thin {
+  height: 2px !important;
+  background: rgba(255, 255, 255, 0.85);
+}
+.glitch .glitch-block {
+  position: absolute;
+  display: block;
+  opacity: 0;
+  animation: glitch-block 560ms steps(1, end) both;
+}
+@keyframes glitch-slice {
+  0% { opacity: 0; transform: translateX(0); }
+  12% { opacity: 1; transform: translateX(var(--dx)); }
+  28% { opacity: 0.3; transform: translateX(calc(var(--dx) * -0.5)); }
+  46% { opacity: 1; transform: translateX(calc(var(--dx) * 0.25)) scaleY(0.45); }
+  64%, 100% { opacity: 0; transform: none; }
+}
+@keyframes glitch-block {
+  0% { opacity: 0; }
+  18% { opacity: 1; }
+  40% { opacity: 0; }
+  56% { opacity: 0.9; }
+  78%, 100% { opacity: 0; }
+}
+
+/* ===========================================================================
+   Pages and the reveal system (see PageFrame.tsx)
+   =========================================================================== */
+.page {
+  position: absolute;
+  inset: 0;
+  --p: 1;
+  --dir: 1;
+}
+.page-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule) transparent;
+}
+.page-inner {
+  position: relative;
+  min-height: 100%;
+  padding: var(--top) calc(var(--rail) + 8px) var(--bottom) var(--pad-x);
+}
+/* Content that scrolls under the top and bottom bars fades out instead of colliding with them */
+.page:not(.page-overview) .page-scroll {
+  -webkit-mask-image: linear-gradient(transparent, #000 64px, #000 calc(100% - 78px), transparent);
+  mask-image: linear-gradient(transparent, #000 64px, #000 calc(100% - 78px), transparent);
+}
+/* Each .reveal element fades and slides in with the page, starting at its own delay --d (0..0.6). */
+.page .reveal {
+  --q: clamp(0, (var(--p) - var(--d, 0)) / (1 - var(--d, 0)), 1);
+  opacity: var(--q);
+  translate: 0 calc((1 - var(--q)) * var(--dir) * 36px);
+}
+
+/* ===========================================================================
+   Shared bits
+   =========================================================================== */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  background: var(--chip);
+  color: var(--chip-ink);
+  font: 600 9px/1.15 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.tag.is-outline {
+  background: transparent;
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+.micro {
+  font: 500 10px/1.65 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.eyebrow {
+  font: 700 11px/1.2 var(--font-sans);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.halftone {
+  background-image: radial-gradient(circle, var(--accent) 36%, transparent 40%);
+  background-size: 7px 7px;
+}
+
+/* Panels: translucent glass with two corner brackets */
+.panel {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  backdrop-filter: blur(12px) saturate(1.1);
+}
+.panel::before,
+.panel::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 0 solid var(--ink);
+  pointer-events: none;
+}
+.panel::before {
+  top: -1px;
+  left: -1px;
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+.panel::after {
+  right: -1px;
+  bottom: -1px;
+  border-right-width: 2px;
+  border-bottom-width: 2px;
+}
+
+/* Status chips: colour + icon + label, never colour alone */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 700 11px/1 var(--font-sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.status svg {
+  flex: none;
+}
+.status-good { --status: var(--good); }
+.status-warning { --status: var(--warning); }
+.status-serious { --status: var(--serious); }
+.status-critical { --status: var(--critical); }
+.status-muted { --status: var(--ink-3); }
+.status .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status);
+}
+.status .icon {
+  color: var(--status);
+}
+
+kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  border: 1px solid var(--ink);
+  font: 600 9px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glitch {
+    display: none;
+  }
+  .orbit-spin {
+    animation: none;
+  }
+}
+
+/* Compact layout (phones, small or portrait windows). Keep in sync with hooks/useCompact.ts */
+@media (max-width: 899px), (max-aspect-ratio: 1/1) {
+  :root {
+    --top: 76px;
+    --bottom: 64px;
+    --rail: 30px;
+  }
+  .panel {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}

@@ -1,0 +1,916 @@
+/* ===========================================================================
+   Page header (pages 2-4, see components/PageHeader.tsx)
+   =========================================================================== */
+.ph {
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(14px, 2vw, 30px);
+  margin-bottom: clamp(16px, 2.6vh, 30px);
+}
+.ph-num {
+  flex: none;
+  font: 200 clamp(64px, 8vw, 124px)/0.78 var(--font-sans);
+  letter-spacing: -0.03em;
+  color: transparent;
+  -webkit-text-stroke: 1px var(--ink);
+}
+.ph-body {
+  display: grid;
+  gap: 7px;
+}
+.ph-kicker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ph-title {
+  font: 800 clamp(30px, 3.4vw, 52px)/0.95 var(--font-sans);
+  letter-spacing: 0.05em;
+}
+.ph-ruler {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 120px;
+  margin-bottom: 6px;
+  font: 500 8px/1 var(--font-mono);
+  letter-spacing: 0.16em;
+  color: var(--ink-3);
+}
+.ph-ruler i {
+  flex: 1;
+  height: 7px;
+  border-bottom: 1px solid var(--rule);
+  background: repeating-linear-gradient(90deg, var(--rule) 0 1px, transparent 1px 10px) bottom / 100% 4px no-repeat;
+}
+
+/* ===========================================================================
+   01 Overview
+   =========================================================================== */
+.page-overview .page-inner {
+  padding: 0;
+}
+.ov {
+  position: relative;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 620px;
+  /* Right edge of the text column on the left (dossier, event feed) */
+  --column-end: min(21vw, var(--pad-x) + 280px);
+  /* How far the infinity ever reaches: left, and right at the light callout's height. These mirror the
+     overview pose in scene/poses.ts (centre 12vw right of the middle, radius min(23.5vw, 43vh)): with the
+     band's width, the rocking and the perspective, its outermost slats reach 1.25 radii left of the centre
+     and 1.18 radii right. Update them if you move or resize it there. */
+  --ribbon-left: calc(62vw - 1.25 * min(23.5vw, 43vh));
+  --ribbon-right: calc(62vw + 1.18 * min(23.5vw, 43vh));
+  /* The moisture card sits just clear of the infinity, but never over the text column. On narrower
+     screens there's no room, so it overlaps the infinity's left loop a little. */
+  --hero-w: clamp(300px, 24vw, 390px);
+  --hero-x: max(var(--column-end) + 24px, min(22.5vw, var(--ribbon-left) - var(--hero-w) - 16px));
+}
+.ov-brand {
+  position: absolute;
+  top: 30px;
+  left: var(--pad-x);
+}
+.brand {
+  display: grid;
+  gap: 4px;
+  font-weight: inherit;
+}
+.brand-name {
+  font: 800 clamp(30px, 3.3vw, 54px)/0.95 var(--font-sans);
+  letter-spacing: 0.012em;
+}
+.brand-sub {
+  margin-top: 4px;
+  font: 600 clamp(11px, 1.05vw, 16px)/1.2 var(--font-sans);
+  letter-spacing: 0.11em;
+}
+.brand-os {
+  font: 300 clamp(30px, 3.3vw, 54px)/1 var(--font-sans);
+  letter-spacing: 0.03em;
+}
+.brand-os b {
+  font-weight: 800;
+}
+.brand-motto {
+  margin-top: 12px;
+}
+.ov-ribbon-space {
+  display: none;
+}
+.ov-dossier,
+.ov-feed {
+  position: absolute;
+  left: var(--pad-x);
+  width: calc(var(--column-end) - var(--pad-x));
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+.ov-dossier {
+  top: 31vh;
+}
+.ov-feed {
+  top: 57vh;
+}
+.ov-feed ul {
+  display: grid;
+  gap: 1px;
+}
+.ov-feed li::before {
+  content: "• ";
+}
+.ov-feed li.cursor::before {
+  content: none;
+}
+.cursor {
+  display: inline-block;
+  width: 7px;
+  height: 11px;
+  margin-left: 4px;
+  vertical-align: -1px;
+  background: currentColor;
+  animation: blink 1.05s steps(1) infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+.ov-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--hero-x) + 8vw); /* moves with the card */
+  width: 1px;
+  background: color-mix(in srgb, var(--ink) 55%, transparent);
+}
+
+/* The black moisture card, just left of the infinity */
+.hero {
+  position: absolute;
+  top: 35vh;
+  left: var(--hero-x);
+  width: var(--hero-w);
+}
+.hero-tab {
+  display: inline-block;
+  padding: 8px 16px 7px;
+  border: 1px solid var(--rule);
+  border-bottom: 0;
+  background: color-mix(in srgb, var(--bg) 55%, white);
+  font: 600 11px/1 var(--font-sans);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.hero-card {
+  position: relative;
+  padding: 18px 22px 18px;
+  background:
+    radial-gradient(ellipse 90% 70% at 20% 0%, rgba(255, 255, 255, 0.09), transparent 70%),
+    #0c0d10;
+  color: #f4f4f2;
+  box-shadow: 0 34px 70px -36px rgba(0, 0, 0, 0.55);
+}
+.hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.hero-top .micro {
+  color: rgba(244, 244, 242, 0.55);
+}
+.hero-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--status, #6b6b6b);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--status, #6b6b6b) 22%, transparent);
+}
+.hero-value {
+  margin-top: 6px;
+  font: 800 clamp(66px, 6.4vw, 104px)/0.92 var(--font-sans);
+  letter-spacing: -0.025em;
+}
+.hero-unit {
+  margin-left: 6px;
+  font-size: 0.36em;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: rgba(244, 244, 242, 0.65);
+}
+.hero-word {
+  margin-top: 8px;
+  font: 700 13px/1 var(--font-sans);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+}
+.meter {
+  margin-top: 18px;
+}
+.meter-track {
+  position: relative;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+}
+.meter-fill {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, #dfe7f7, #6f88f3 55%, #3354e6);
+  clip-path: inset(0 calc((1 - var(--f)) * 100%) 0 0);
+  transition: clip-path 1.1s var(--ease);
+}
+.meter-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 7px;
+  font: 500 8px/1 var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(244, 244, 242, 0.45);
+}
+.hero-meta {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 13px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.hero-meta dt {
+  font: 500 8px/1.2 var(--font-mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(244, 244, 242, 0.45);
+}
+.hero-meta dd {
+  margin-top: 5px;
+  font: 600 12px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Callouts around the infinity (desktop); each has a pin where its leader line starts */
+.ov-callouts {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.callout {
+  position: absolute;
+  width: max-content;
+  max-width: min(240px, 15vw);
+  pointer-events: auto;
+}
+.callout .tag {
+  margin-bottom: 9px;
+}
+.callout-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 700 clamp(22px, 1.9vw, 30px)/1 var(--font-sans);
+  letter-spacing: 0.005em;
+}
+.callout-value .icon {
+  color: var(--status, var(--ink));
+}
+.callout-title {
+  margin-top: 7px;
+  font: 700 11px/1.2 var(--font-sans);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.callout-sub {
+  margin-top: 3px;
+}
+.pin {
+  position: absolute;
+  left: -16px;
+  width: 7px;
+  height: 7px;
+  background: var(--ink);
+}
+.callout.is-top .pin {
+  bottom: 3px;
+}
+.callout.is-bottom .pin {
+  top: 3px;
+}
+.callout-temp { top: 6vh; left: 38vw; }
+.callout-humidity { top: 7vh; left: 67vw; }
+/* Just clear of the infinity's right loop (24px leaves its pin 8px clear), but never past the right margin
+   (the callout is about 130px wide): on narrower screens there's no room, so it overlaps the loop a little. */
+.callout-light { top: 62vh; left: min(100% - var(--pad-x) - 130px, max(84vw, var(--ribbon-right) + 24px)); }
+.callout-reservoir { top: 81vh; left: 55vw; }
+.callout-faults { top: 81vh; left: 35vw; }
+
+.leaders {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.leaders line {
+  stroke: color-mix(in srgb, var(--ink) 70%, transparent);
+  stroke-width: 1;
+}
+.leader-dot {
+  fill: var(--ink);
+}
+.leader-ring {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ink) 45%, transparent);
+  stroke-width: 1;
+}
+
+/* ===========================================================================
+   02 Trends
+   =========================================================================== */
+.page-trends .page-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 660px;
+}
+.tr {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.tr-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: minmax(220px, 1.15fr) minmax(190px, 1fr);
+  gap: 16px;
+  transition: opacity 0.3s;
+}
+.tr-grid.is-loading {
+  opacity: 0.55;
+}
+.tr-moist {
+  grid-column: 1 / -1;
+}
+.tr-dots {
+  position: absolute;
+  top: calc(var(--top) - 6px);
+  right: 30%;
+  width: 98px;
+  height: 56px;
+  pointer-events: none;
+}
+.chart-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 14px 16px 8px;
+}
+.cp-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.cp-title {
+  display: grid;
+  gap: 5px;
+}
+.cp-title h3 {
+  font: 700 14px/1.1 var(--font-sans);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.cp-read {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+  text-align: right;
+}
+.cp-value {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font: 700 28px/1 var(--font-sans);
+}
+.cp-value span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.cp-key {
+  align-self: center;
+  width: 16px;
+  height: 2px;
+  margin-right: 4px;
+  border-radius: 1px;
+}
+.chart {
+  position: relative;
+  flex: 1;
+  min-height: 120px;
+  margin-top: 4px;
+}
+.chart svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: visible;
+}
+.chart svg:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.chart .grid {
+  stroke: var(--rule);
+  shape-rendering: crispEdges;
+}
+.chart .axis {
+  stroke: color-mix(in srgb, var(--ink) 35%, transparent);
+  shape-rendering: crispEdges;
+}
+.chart .tick {
+  font: 500 10px var(--font-mono);
+  fill: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.chart .line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.chart .mark {
+  stroke: #f3f3f4; /* 2px ring in the panel colour keeps the dot legible over the line */
+  stroke-width: 2;
+}
+.chart .crosshair {
+  stroke: color-mix(in srgb, var(--ink) 55%, transparent);
+  shape-rendering: crispEdges;
+}
+.chart .hit {
+  fill: transparent;
+  cursor: crosshair;
+}
+.chart-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* ===========================================================================
+   03 Analysis
+   =========================================================================== */
+.an-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.85fr) minmax(0, 2fr);
+  gap: clamp(22px, 3vw, 52px);
+  align-items: start;
+}
+.an-side {
+  display: grid;
+  gap: 22px;
+}
+.an-lede {
+  max-width: 34ch;
+  font: 500 clamp(15px, 1.2vw, 19px)/1.5 var(--font-sans);
+}
+.an-scope {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 18px;
+  padding: 16px 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.an-scope dt {
+  font: 500 9px/1 var(--font-mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.an-scope dd {
+  margin-top: 6px;
+  font: 700 13px/1.2 var(--font-sans);
+  letter-spacing: 0.04em;
+}
+.run {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 16px 18px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.25s, color 0.25s;
+}
+.run:hover:not(:disabled) {
+  background: transparent;
+  color: var(--ink);
+}
+.run:disabled {
+  cursor: progress;
+}
+.run-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid currentColor;
+}
+.run-text {
+  display: grid;
+  gap: 5px;
+}
+.run-text b {
+  font: 800 15px/1 var(--font-sans);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+.run-text small {
+  font: 500 9px/1 var(--font-mono);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+.spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.an-report {
+  min-height: 360px;
+  max-height: calc(100vh - var(--top) - var(--bottom) - 190px);
+  overflow-y: auto;
+  padding: 26px 30px;
+  overscroll-behavior: contain;
+}
+.ai-idle,
+.ai-running {
+  display: grid;
+  align-content: center;
+  min-height: 300px;
+}
+.ai-idle {
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+.ai-idle-title {
+  font: 800 22px/1 var(--font-sans);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.ai-running {
+  gap: 24px;
+}
+.scanner {
+  position: relative;
+  height: 70px;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  background: repeating-linear-gradient(90deg, var(--rule) 0 1px, transparent 1px 14px);
+}
+.scanner::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 32%;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 60%, transparent), transparent);
+  animation: scan 1.7s ease-in-out infinite;
+}
+@keyframes scan {
+  from { left: -32%; }
+  to { left: 100%; }
+}
+.ai-log {
+  display: grid;
+  gap: 6px;
+  color: var(--ink-2);
+}
+.ai-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.ai-head .status,
+.ai-error .status {
+  font-size: 12px;
+}
+.status .icon {
+  color: var(--status);
+}
+.ai-headline {
+  max-width: 48ch;
+  margin: 18px 0 24px;
+  font: 700 clamp(19px, 1.6vw, 26px)/1.32 var(--font-sans);
+}
+.ai-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+}
+.ai-cols h4 {
+  margin-bottom: 12px;
+}
+.ai-summary {
+  display: grid;
+  gap: 10px;
+}
+.ai-summary li {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  gap: 8px;
+  line-height: 1.5;
+}
+.ai-n {
+  font: 600 10px/2 var(--font-mono);
+  color: var(--ink-3);
+}
+.ai-advice {
+  display: grid;
+  gap: 10px;
+}
+.ai-advice li {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 10px;
+  padding: 10px 12px;
+  border-left: 2px solid var(--status);
+  background: color-mix(in srgb, var(--status) 13%, transparent);
+  line-height: 1.5;
+}
+.ai-advice .icon {
+  margin-top: 2px;
+  color: var(--status);
+}
+.ai-none {
+  color: var(--ink-2);
+}
+.ai-raw {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+.ai-meta {
+  margin-top: 26px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+}
+.ai-error {
+  display: grid;
+  gap: 12px;
+  min-height: 300px;
+  align-content: center;
+}
+.ai-error-text {
+  max-width: 60ch;
+  font: 500 15px/1.5 var(--font-sans);
+}
+
+/* ===========================================================================
+   04 Log
+   =========================================================================== */
+.lg {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr); /* lets the wide table scroll sideways instead of widening the page */
+  gap: 18px;
+}
+.lg-panel {
+  padding: 16px 18px;
+}
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 14px;
+  margin-bottom: 14px;
+}
+.panel-head h3 {
+  font: 700 14px/1.1 var(--font-sans);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.panel-head .micro {
+  margin-left: auto;
+}
+.tl {
+  position: relative;
+  display: grid;
+  gap: 9px;
+}
+.tl-row {
+  display: grid;
+  grid-template-columns: 190px 1fr 46px;
+  align-items: center;
+  gap: 14px;
+}
+.tl-label {
+  color: var(--ink-2);
+}
+.tl-track {
+  position: relative;
+  height: 14px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+.tl-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.tl-share {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.tl-ticks {
+  display: flex;
+  justify-content: space-between;
+}
+.tl-tip {
+  position: absolute;
+  z-index: 2;
+  padding: 6px 8px;
+  background: var(--chip);
+  color: var(--chip-ink);
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 12px));
+}
+.table-wrap {
+  overflow-x: auto;
+}
+.readings {
+  width: 100%;
+  border-collapse: collapse;
+  font: 500 12px/1.3 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.readings th {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  font: 600 9px/1 var(--font-mono);
+  letter-spacing: 0.16em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-3);
+}
+.readings td {
+  padding: 8px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
+  white-space: nowrap;
+}
+.readings .num {
+  text-align: right;
+}
+.readings tbody tr:hover td {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+}
+.readings tr.is-test td {
+  color: var(--ink-2);
+}
+.readings .tag {
+  margin-left: 8px;
+}
+.readings .empty {
+  padding: 22px 10px;
+  color: var(--ink-3);
+  text-align: center;
+}
+.cell-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--status);
+}
+.lg-end {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding-top: 6px;
+}
+.lg-end i {
+  width: 6px;
+  height: 6px;
+  background: var(--ink-3);
+}
+
+/* ===========================================================================
+   Compact layout: pages scroll inside themselves; the pager turns the page at their ends
+   =========================================================================== */
+@media (max-width: 899px), (max-aspect-ratio: 1/1) {
+  .page-inner {
+    padding: calc(var(--top) + 34px) calc(var(--pad-x) + 16px) calc(var(--bottom) + 8px) var(--pad-x);
+  }
+  .page-overview .page-inner {
+    padding: 20px calc(var(--pad-x) + 16px) calc(var(--bottom) + 8px) var(--pad-x);
+  }
+  .ov {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    height: auto;
+    min-height: 0;
+  }
+  .ov-brand,
+  .ov-dossier,
+  .ov-feed,
+  .hero,
+  .ov-callouts,
+  .callout {
+    position: static;
+    width: auto;
+  }
+  .ov-ribbon-space {
+    display: block;
+    order: 1;
+    height: 34vh;
+  }
+  .ov-brand { order: 0; }
+  .hero { order: 2; max-width: 460px; }
+  .ov-callouts { order: 3; display: grid; grid-template-columns: 1fr 1fr; gap: 20px 14px; pointer-events: auto; }
+  .ov-dossier { order: 4; }
+  .ov-feed { order: 5; }
+  .callout {
+    max-width: none;
+    padding: 10px 12px 12px;
+    border: 1px solid var(--rule);
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
+  }
+  .ov-divider,
+  .pin,
+  .ph-kicker .micro {
+    display: none;
+  }
+  .page-trends .page-inner {
+    height: auto;
+    min-height: 100%;
+  }
+  .tr-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+  .tr-moist {
+    grid-column: auto;
+  }
+  .chart-panel {
+    min-height: 270px;
+  }
+  .tr-dots {
+    display: none;
+  }
+  .an-grid,
+  .ai-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .page-overview .page-scroll {
+    -webkit-mask-image: linear-gradient(#000 calc(100% - 78px), transparent);
+    mask-image: linear-gradient(#000 calc(100% - 78px), transparent);
+  }
+  .an-report {
+    max-height: none;
+    overflow: visible;
+    padding: 20px;
+  }
+  .ph-num {
+    font-size: 58px;
+  }
+  .ph-ruler {
+    display: none;
+  }
+  .tl-row {
+    grid-template-columns: 1fr 40px;
+    gap: 4px 10px;
+  }
+  .tl-label {
+    grid-column: 1 / -1;
+  }
+  .tl-axis {
+    grid-template-columns: 1fr 40px;
+  }
+  .tl-axis > span:first-child {
+    display: none;
+  }
+}

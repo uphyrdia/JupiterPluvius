@@ -1,4 +1,12 @@
+dashboard/backend/.env
+dashboard/backend/.venv/
+dashboard/backend/__pycache__/
+
 datasheets/
+
+# Frontend: installed packages and the production build (Render rebuilds it on every deploy)
+dashboard/frontend/node_modules/
+dashboard/frontend/dist/
 
 # Generated build output
 MCXC444/Debug/

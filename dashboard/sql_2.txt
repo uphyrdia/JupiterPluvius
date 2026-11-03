@@ -1,0 +1,11 @@
+GRANT INSERT ON TABLE public.readings TO authenticated;
+GRANT USAGE ON SEQUENCE public.readings_id_seq TO authenticated;
+
+CREATE POLICY "esp32_insert"
+ON public.readings
+FOR INSERT
+TO authenticated
+WITH CHECK (
+    (SELECT auth.uid()) = '4ecbda0b-de6d-4017-a0f6-b37ea67b65eb'::uuid
+    AND device_id = 'esp32'
+);
