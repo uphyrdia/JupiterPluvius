@@ -34,9 +34,9 @@
 
 #define QLEN	5
 
-#define LIGHT_ADC_THRESHOLD		20
+#define LIGHT_ADC_THRESHOLD				1000U
 /* Higher ADC values mean drier soil. */
-#define SOIL_MOISTURE_ADC_THRESHOLD    	1200U
+#define SOIL_MOISTURE_ADC_THRESHOLD    	1600U
 
 #define SOIL_MOISTURE_SAMPLING_PERIOD	 500U
 #define SEND_INTERVAL_MS				1000U
@@ -49,7 +49,7 @@ SemaphoreHandle_t reservoir_level_sema;
 SemaphoreHandle_t print_mutex;
 SemaphoreHandle_t uart_sema;
 
-static unsigned int moisture = 2000;
+static unsigned int moisture = 1000;
 volatile bool reservoir_level_ok; // initialized in initCMP0()
 
 static bool pumping = false;
