@@ -202,7 +202,7 @@ plant-watering device for one potted plant.
 
 How the device works:
 - An MCXC444 microcontroller reads a soil-moisture sensor with a 12-bit ADC (soil_raw, 0-4095).
-  The reading is INVERSELY related to moisture: about {dry} in dry air, about {wet} in a wet tissue.
+  The reading is INVERSELY related to moisture: about {dry} in dry air, about {wet} when fully wet.
   moisture_pct = (soil_raw - {dry}) / ({wet} - {dry}) * 100, clamped to 0-100.
 - Whenever soil_raw is above {PUMP_THRESHOLD_RAW} (drier than that), the firmware runs the water pump
   in short bursts (1 s if air humidity > 60 %, otherwise 2 s). Pump activity itself is not logged.
@@ -274,7 +274,7 @@ async def insights(
     include_test: bool = True,
     tz_offset_min: int = Query(0, ge=-720, le=840),  # the browser's offset from UTC, e.g. 480 for UTC+8
     soil_dry_raw: int = 1900,
-    soil_wet_raw: int = 1200,
+    soil_wet_raw: int = 500,
 ):
     """Ask DeepSeek for a short summary of, and advice on, the readings from the last `hours`."""
     global _last_ai_call

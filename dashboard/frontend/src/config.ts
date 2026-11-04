@@ -3,7 +3,7 @@ export const CONFIG = {
   /** "" = the server that serves this page. Set VITE_API_BASE at build time if the API lives elsewhere. */
   API_BASE: (import.meta.env.VITE_API_BASE as string | undefined) ?? "",
   SOIL_DRY_RAW: 1900, // soil ADC reading in dry air        -> 0 %
-  SOIL_WET_RAW: 1200, // soil ADC reading in a wet tissue   -> 100 %
+  SOIL_WET_RAW: 500, // soil ADC reading when fully wet     -> 100 %
   POLL_MS: 5000, // how often to check for new readings
   STALE_AFTER_S: 180, // no reading for this long -> "device offline"
   GAP_MS: 5 * 60 * 1000, // break chart lines across gaps longer than this

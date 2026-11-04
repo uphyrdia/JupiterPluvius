@@ -112,7 +112,7 @@ export function Overview({ telemetry, hours, progress, active, compact }: Props)
           <p className="micro">
             An MCXC444 reads the soil probe and relays it over UART to an ESP32, which uploads every reading
             to Supabase. The raw ADC falls as the soil gets wetter: {CONFIG.SOIL_DRY_RAW} in dry air reads as 0 %,{" "}
-            {CONFIG.SOIL_WET_RAW} in a wet tissue as 100 %.
+            {CONFIG.SOIL_WET_RAW} or lower as 100 %.
           </p>
         </section>
 
