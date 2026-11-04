@@ -104,8 +104,7 @@ already allows cross-origin requests.
 
 Four full-screen pages: **Overview** (live readings around a 3D infinity sign whose colour shows the soil moisture),
 **Trends** (charts), **Analysis** (AI check-up) and **Log** (states over time, recent readings). Scrolling first makes the
-page creep and resist; past a threshold it jumps to the next page, and the background, the colours and the 3D ribbon
-move with it. Arrow keys, Page Up/Down, Space, Home/End and the number keys 1–4 also work, as do swipes on a phone.
+page creep and resist; past a threshold it jumps to the next page, and the background and the colours move with it. Arrow keys, Page Up/Down, Space, Home/End and the number keys 1–4 also work, as do swipes on a phone.
 
 | Library | Used for |
 |---|---|
@@ -131,14 +130,15 @@ src/
   pages/                Overview, Trends, Analysis, Log
   charts/               LineChart (SVG + d3), StatesTimeline, ReadingsTable
   components/           Chrome (top bar, rail, bottom bar), Backdrop, GlitchBurst, PageFrame, ...
-  scene/                the 3D ribbon: poses.ts (where it sits on each page), Ribbon.tsx, ribbonShader.ts
+  scene/                the 3D ribbon on the overview: poses.ts (where it sits), Ribbon.tsx, ribbonShader.ts
   lib/                  API client and types, formatting, moisture maths, colours per page
   styles/               base.css (tokens, layers), chrome.css, pages.css
 ```
 
-The ribbon is one box shape drawn about 460 times with a custom shader (one draw call). Each slat works out its own
-place on the curve, so the band can breathe, twist and stream from one page's pose to the next. Its colour goes from
-white-ish blue (dry) to deep ultramarine (wet).
+The ribbon only appears on the overview. When you leave the page, it drifts up and fades out with it, and the 3D scene
+stops rendering until you come back. It is one box shape drawn about 460 times with a custom shader (one draw call).
+Each slat works out its own place on the curve, so the band can breathe and twist. Its colour goes from white-ish blue
+(dry) to deep ultramarine (wet).
 
 While `npm run dev` is running, a few URL parameters help with design work (they don't exist in the production build):
 `?m=0.2` pretends the soil moisture is 20 %, `?p=1.5` freezes the view halfway between pages 2 and 3, and `?still`

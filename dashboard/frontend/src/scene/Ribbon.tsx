@@ -5,11 +5,11 @@ import * as THREE from "three";
 import { moistureColor, moistureEdge } from "../lib/moisture";
 import { rgbAt, THEME_STOPS } from "../lib/theme";
 import { ANCHORS, anchorBus } from "./anchors";
-import { poses } from "./poses";
-import { makePoseUniform, rand, streamedCenter, writePose, type PoseUniform } from "./ribbonMath";
+import { overviewPose } from "./poses";
+import { makePoseUniform, rand, slatCenter, writePose, type PoseUniform } from "./ribbonMath";
 import { fragmentShader, vertexShader } from "./ribbonShader";
 
-const LAG = 0.55; // later slats leave up to 55 % of the transition after the first ones
+const PAGE_SLIDE = 0.12; // pages slide 12vh per page as you move between them (see PageFrame)
 const ORIGIN = new THREE.Vector3();
 const point = new THREE.Vector3();
 
@@ -20,7 +20,7 @@ interface Props {
   reduceMotion: boolean;
 }
 
-/** The infinity sign made of thin slats, streaming between per-page poses as `progress` changes. */
+/** The infinity sign made of thin slats on the overview. As you leave the page, it slides up with it. */
 export function Ribbon({ progress, moisture, compact, reduceMotion }: Props) {
   const count = compact ? 340 : 460;
 
@@ -39,13 +39,9 @@ export function Ribbon({ progress, moisture, compact, reduceMotion }: Props) {
       vertexShader,
       fragmentShader,
       uniforms: {
-        uA: { value: makePoseUniform() },
-        uB: { value: makePoseUniform() },
-        uMix: { value: 0 },
+        uPose: { value: makePoseUniform() },
         uTime: { value: 0 },
         uCount: { value: count },
-        uLag: { value: LAG },
-        uSwirl: { value: 1 },
         uBg: { value: new THREE.Color() },
         uLight: { value: new THREE.Vector3(-0.35, 0.55, 0.75).normalize() },
       },
@@ -79,20 +75,11 @@ export function Ribbon({ progress, moisture, compact, reduceMotion }: Props) {
     L.edge.lerp(target.edge, k);
 
     const uniforms = (mesh.material as THREE.ShaderMaterial).uniforms;
-    const p = progress.get();
+    const p = Math.min(1, progress.get()); // only the overview and the way off it matter here
     const vp = state.viewport.getCurrentViewport(state.camera, ORIGIN);
-    const list = poses(vp.width, vp.height, compact);
-    const from = Math.max(0, Math.min(list.length - 2, Math.floor(p)));
-    const mix = Math.max(0, Math.min(1, p - from));
-    const swirl = reduceMotion ? 0 : 1;
-
-    const A = uniforms.uA.value as PoseUniform;
-    const B = uniforms.uB.value as PoseUniform;
-    writePose(A, list[from], L.time, count, L.color, L.edge);
-    writePose(B, list[from + 1], L.time, count, L.color, L.edge);
-    uniforms.uMix.value = mix;
+    const pose = uniforms.uPose.value as PoseUniform;
+    writePose(pose, overviewPose(vp.width, vp.height, compact), L.time, count, p * PAGE_SLIDE * vp.height, L.color, L.edge);
     uniforms.uTime.value = L.time;
-    uniforms.uSwirl.value = swirl;
     const [r, g, b] = rgbAt(THEME_STOPS.bg, p);
     (uniforms.uBg.value as THREE.Color).setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
 
@@ -101,7 +88,7 @@ export function Ribbon({ progress, moisture, compact, reduceMotion }: Props) {
     if (anchorBus.visible) {
       ANCHORS.forEach(({ u }, j) => {
         const i = Math.round(u * count) % count;
-        streamedCenter(A, B, mix, i / count, rand(i), L.time, LAG, swirl, point).project(state.camera);
+        slatCenter(pose, i / count, L.time, point).project(state.camera);
         anchorBus.xy[2 * j] = ((point.x + 1) / 2) * state.size.width;
         anchorBus.xy[2 * j + 1] = ((1 - point.y) / 2) * state.size.height;
       });

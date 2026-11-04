@@ -123,6 +123,10 @@ button {
   opacity: 1;
   transition: none;
 }
+.scene-fade {
+  position: absolute;
+  inset: 0;
+}
 .pages {
   position: absolute;
   inset: 0;
