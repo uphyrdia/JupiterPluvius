@@ -69,19 +69,38 @@
   min-height: 620px;
   /* Right edge of the text column on the left (dossier, event feed) */
   --column-end: min(21vw, var(--pad-x) + 280px);
-  /* How far the infinity ever reaches, left and right. These mirror scene/framing.ts, which places the
-     sculpture so that, rocking included, it spans 62vw − 1.25r to 62vw + 1.18r, r = min(23.5vw, 43vh).
+  /* Where the infinity is. These mirror scene/framing.ts: rhine-lock's frame is --ribbon-h tall (the
+     screen's height, or 9/16 of its width, or less where the room between the text column and the light
+     callout, or above the bottom row of callouts, is short), and the sculpture, rocking and parallax
+     included, spans 1.25 times that across: centred at 62vw where there's room, else moved left.
      Update them together. */
-  --ribbon-left: calc(62vw - 1.25 * min(23.5vw, 43vh));
-  --ribbon-right: calc(62vw + 1.18 * min(23.5vw, 43vh));
-  /* Both windows are --hero-w wide. The soil moisture window sits just clear of the infinity, but
-     never over the text column. On narrower screens there's no room, so it overlaps the infinity's
-     left loop. */
+  --ribbon-h: min(100vh, 56.25vw, (100vw - var(--pad-x) - 154px - var(--column-end) - 24px) / 1.25,
+    (50vh - 170px - clamp(22px, 1.9vw, 30px)) / 0.298);
+  --ribbon-left: clamp(var(--column-end) + 24px, 62vw - 0.625 * var(--ribbon-h),
+    100vw - var(--pad-x) - 154px - 1.25 * var(--ribbon-h));
+  --ribbon-right: calc(var(--ribbon-left) + 1.25 * var(--ribbon-h));
+  /* rhine-lock's 16:9 frame: its centre across and its width, so callouts can sit by parts of the sculpture
+     (x 0.47 of the frame is where its strands cross) */
+  --frame-x: calc(var(--ribbon-left) + 0.608 * var(--ribbon-h));
+  --frame-w: calc(16 / 9 * var(--ribbon-h));
+  /* The bottom row of callouts: 24px under the left loop's lowest fin, 0.298 * --ribbon-h below the
+     middle of the screen. Its two callouts are at most --row-w wide; the faults one starts at --faults-x:
+     under the left loop's far end (x 0.17 of the frame), or further left where both, at their widest,
+     wouldn't fit side by side before the reservoir ends under the crossing (x 0.54) */
+  --row-bottom: calc(50vh + 0.298 * var(--ribbon-h) + 24px);
+  --row-w: min(240px, max(15vw, 212px));
+  --faults-x: max(var(--column-end) + 24px, min(var(--frame-x) - 0.33 * var(--frame-w),
+    var(--frame-x) + 0.04 * var(--frame-w) - 2 * var(--row-w) - 40px));
+  /* Both windows are --hero-w wide. The soil moisture window sits about 3/16 of the way across, but never
+     over the text column; it may cover part of the infinity's left loop, as rhine-lock's login panel
+     covers part of its sculpture. */
   --hero-w: clamp(300px, 24vw, 390px);
-  --hero-x: max(var(--column-end) + 24px, min(22.5vw, var(--ribbon-left) - var(--hero-w) - 16px));
-  /* Where the brand block ends (30px down, then its lines; see .brand below). The soil moisture
-     window is centred between it and the bottom row of callouts at 81vh. */
-  --brand-bottom: calc(71px + 1.95 * clamp(30px, 3.3vw, 54px) + 1.26 * clamp(11px, 1.05vw, 16px));
+  --hero-x: max(var(--column-end) + 24px, 18.75vw);
+  /* The brand's name (.brand-name: about 9.6em wide), and where the brand block ends (30px down, then its
+     lines; see .brand below). The soil moisture window is centred between it and the bottom row. */
+  --brand-font: clamp(30px, 3.3vw, 54px);
+  --brand-bottom: calc(71px + 1.95 * var(--brand-font) + 1.26 * clamp(11px, 1.05vw, 16px));
+  --divider-x: calc(var(--hero-x) + 8vw);
 }
 .ov-brand {
   position: absolute;
@@ -154,21 +173,27 @@
     opacity: 0;
   }
 }
+/* A rule from top to bottom that moves with the soil moisture window, behind it. It starts under the brand
+   where it would cross the brand's name, and stops above the bottom row where it would run through the
+   faults callout: each clamp() is 0 unless the rule would cross, when the product is large and capped. */
 .ov-divider {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: calc(var(--hero-x) + 8vw); /* moves with the card */
+  top: clamp(0px, (var(--pad-x) + 9.6 * var(--brand-font) + 24px - var(--divider-x)) * 1000,
+    var(--brand-bottom) + 24px);
+  bottom: clamp(0px, min(var(--divider-x) - var(--faults-x) + 24px, var(--faults-x) + var(--row-w) + 8px - var(--divider-x)) * 1000,
+    100% - var(--row-bottom) + 24px);
+  left: var(--divider-x);
   width: 1px;
   background: color-mix(in srgb, var(--ink) 55%, transparent);
 }
 
-/* The two black windows, each a link to its page. Soil moisture sits just left of the infinity; the
-   AI check-up is in the top right corner (.ov-corner below). Sizes shrink a little on short screens. */
+/* The two black windows, each a link to its page. Soil moisture sits by the infinity's left loop; the
+   AI check-up is in the top right corner (.ov-corner below). Both may cover a little of the infinity.
+   Sizes shrink a little on short screens. */
 .ov-moisture {
   position: absolute;
   z-index: 2; /* in front of the leader lines, which pass behind them */
-  top: calc((var(--brand-bottom) + 81vh) / 2);
+  top: calc((var(--brand-bottom) + var(--row-bottom)) / 2);
   left: var(--hero-x);
   width: var(--hero-w);
   transform: translateY(-50%);
@@ -362,10 +387,9 @@
 }
 
 /* The AI check-up window in the top right corner, under the top bar. Taller screens leave a bigger
-   gap under the top bar: up to 32px more. Under the window is the top of the infinity's right loop,
-   so the full report (with Report / Advice / Readings) only shows on screens at least 1100px tall
-   and 2500px wide; elsewhere it's the verdict and one line. On 16:9 laptop screens the loop still
-   slides behind the window's lower left corner at times. */
+   gap under the top bar: up to 32px more. The top of the infinity's right loop passes behind the
+   window, so the full report (with Report / Advice / Readings) only shows on screens at least 1100px
+   tall and 2500px wide; elsewhere it's the verdict and one line, and covers less of the loop. */
 .ov-corner {
   position: absolute;
   z-index: 2;
@@ -442,8 +466,16 @@
 /* Just clear of the infinity's right loop (24px leaves its pin 8px clear), but never past the right margin
    (the callout is about 130px wide): on narrower screens there's no room, so it overlaps the loop a little. */
 .callout-light { top: 62vh; left: min(100% - var(--pad-x) - 130px, max(84vw, var(--ribbon-right) + 24px)); }
-.callout-reservoir { top: 81vh; left: 55vw; }
-.callout-faults { top: 81vh; left: 35vw; }
+/* The bottom row sits by the sculpture itself (see --row-bottom and --faults-x): the reservoir ends under
+   the crossing (x 0.54 of the frame), where the band is high enough. Both may be a little wider than the
+   other callouts, so the reservoir's line never wraps (and the row stays above the scroll cue). */
+.callout-reservoir,
+.callout-faults {
+  top: var(--row-bottom);
+  max-width: var(--row-w);
+}
+.callout-reservoir { right: calc(100% - var(--frame-x) - 0.04 * var(--frame-w)); }
+.callout-faults { left: var(--faults-x); }
 
 .leaders {
   position: absolute;
