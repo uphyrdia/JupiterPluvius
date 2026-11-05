@@ -152,3 +152,7 @@ void receiveFromMCXC444(MCXStatus& mcx) {
     }
   }
 }
+
+bool mcxIsFresh(const MCXStatus& mcx, unsigned long now) {
+  return mcx.valid && (now - mcx.receivedMs <= MCU_MAX_AGE_MS);
+}

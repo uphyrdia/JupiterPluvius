@@ -1,6 +1,8 @@
 #ifndef CG2271_UART_H
 #define CG2271_UART_H
 
+constexpr unsigned long MCU_MAX_AGE_MS = 15000;
+
 struct MCXStatus {
   bool valid = false;
   int soilADC = 0;         // Raw 12-bit soil reading (0..4095)
@@ -10,6 +12,9 @@ struct MCXStatus {
   bool ledOn = false;      // 1 = external LED on
   unsigned long receivedMs = 0;
 };
+
+// True when a valid MCU status is no more than MCU_MAX_AGE_MS old.
+bool mcxIsFresh(const MCXStatus& mcx, unsigned long now);
 
 // Send only when the supplied sensor readings are fresh.
 void sendToMCXC444(float temperatureC, float humidityPercent, int lightRaw,

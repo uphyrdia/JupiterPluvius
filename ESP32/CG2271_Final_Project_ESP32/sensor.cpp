@@ -1,5 +1,4 @@
 #include "sensor.h"
-#include "uart.h"
 
 #include <Arduino.h>
 #include <DHTesp.h>
@@ -91,8 +90,4 @@ bool dhtIsFresh(unsigned long now) {
 
 bool lightIsFresh(unsigned long now) {
   return lightValid && (now - lightSampleMs <= SENSOR_MAX_AGE_MS);
-}
-
-bool mcxIsFresh(const MCXStatus& mcx, unsigned long now, unsigned long maxAgeMs) {
-  return mcx.valid && (now - mcx.receivedMs <= maxAgeMs);
 }

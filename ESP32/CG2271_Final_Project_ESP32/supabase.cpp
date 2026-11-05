@@ -88,7 +88,7 @@ static String buildReadingJSON(const SupabaseConfig& config, const MCXStatus& mc
   unsigned long now = millis();
   bool haveDHT = dhtIsFresh(now);
   bool haveLight = lightIsFresh(now);
-  bool haveMCX = mcxIsFresh(mcx, now, config.mcuMaxAgeMs);
+  bool haveMCX = mcxIsFresh(mcx, now);
 
   JSONVar reading;
   reading["device_id"] = config.deviceId;

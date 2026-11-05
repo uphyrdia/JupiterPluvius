@@ -25,13 +25,13 @@
 #include "supabase.h"
 #include <time.h>
 
-const char* WIFI_SSID = "utakata";
-const char* WIFI_PASSWORD = "phlorova";
-const char* SUPABASE_URL = "https://swdnnvrihfaetgvsxaht.supabase.co";
-const char* SUPABASE_PUBLISHABLE_KEY = "sb_publishable_sJjt6SXXxUpcYvcTUe7UCA_fNBiWSQ9";
-const char* DEVICE_EMAIL = "uphyrdia@gmail.com";
-const char* DEVICE_PASSWORD = "uphyrdia";
-const char* DEVICE_ID = "esp32";
+constexpr char WIFI_SSID[] = "utakata";
+constexpr char WIFI_PASSWORD[] = "phlorova";
+constexpr char SUPABASE_URL[] = "https://swdnnvrihfaetgvsxaht.supabase.co";
+constexpr char SUPABASE_PUBLISHABLE_KEY[] = "sb_publishable_sJjt6SXXxUpcYvcTUe7UCA_fNBiWSQ9";
+constexpr char DEVICE_EMAIL[] = "uphyrdia@gmail.com";
+constexpr char DEVICE_PASSWORD[] = "uphyrdia";
+constexpr char DEVICE_ID[] = "esp32";
 
 // ==========================================================
 // 2. PIN AND TIMING SETTINGS
@@ -40,11 +40,10 @@ const char* DEVICE_ID = "esp32";
 #define UART_TX_PIN 17
 #define UART_BAUD 9600
 
-const unsigned long DHT_INTERVAL_MS   = 3000;
-const unsigned long LIGHT_INTERVAL_MS = 1000;
-const unsigned long UART_INTERVAL_MS  = 5000;
-const unsigned long API_INTERVAL_MS   = 5000;
-const unsigned long MCU_MAX_AGE_MS    = 15000;
+constexpr unsigned long DHT_INTERVAL_MS   = 3000;
+constexpr unsigned long LIGHT_INTERVAL_MS = 1000;
+constexpr unsigned long UART_INTERVAL_MS  = 5000;
+constexpr unsigned long API_INTERVAL_MS   = 5000;
 
 // WATER is a binary reservoir-threshold flag, not a percentage.
 // MCXC444 sends reservoir_level_ok: WATER:0 means LOW, WATER:1 means OK.
@@ -65,7 +64,6 @@ const SupabaseConfig supabaseConfig = {
   DEVICE_EMAIL,
   DEVICE_PASSWORD,
   DEVICE_ID,
-  MCU_MAX_AGE_MS,
   LIGHT_STATE_THRESHOLD,
   WATER_LOW_CODE
 };

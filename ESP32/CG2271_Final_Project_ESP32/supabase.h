@@ -9,7 +9,6 @@ struct SupabaseConfig {
   const char* deviceEmail;
   const char* devicePassword;
   const char* deviceId;
-  unsigned long mcuMaxAgeMs;
   int lightStateThreshold;
   int waterLowCode;
 };

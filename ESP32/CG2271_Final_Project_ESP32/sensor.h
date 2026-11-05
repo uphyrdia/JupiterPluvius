@@ -22,7 +22,4 @@ float lightIndexFromRaw(int raw);
 bool dhtIsFresh(unsigned long now);
 bool lightIsFresh(unsigned long now);
 
-struct MCXStatus;
-bool mcxIsFresh(const MCXStatus& mcx, unsigned long now, unsigned long maxAgeMs);
-
 #endif // CG2271_SENSOR_H
