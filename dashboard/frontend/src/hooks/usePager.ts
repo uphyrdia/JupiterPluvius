@@ -1,22 +1,27 @@
 import { animate, useMotionValue, useTransform, type MotionValue } from "motion/react";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { PAGE_IDS, parentOf } from "../config";
+import { ZOOM_MS, type Rect, type ZoomDir } from "../lib/zoom";
 
 /*
  * Full-screen "pages" and how you move between them.
  *
  * The overview and the log form a short scroll. Instead of scrolling freely, the wheel (or a swipe)
  * first makes the view creep a little toward the next page, like pulling against a spring. Once the
- * gesture passes a threshold, the dashboard jumps to that page in one smooth animation; if the
- * gesture stops short, it springs back. Trends and Analysis are not on the scroll: they open from
- * the overview's two windows with the same jump, and go back with Esc, the back button or by
+ * gesture passes a threshold, the dashboard jumps to that page in one smooth animation (with a glitch
+ * burst, see App.tsx); if the gesture stops short, it springs back.
+ *
+ * Trends and Analysis are not on the scroll: they open from the overview's two windows with the
+ * window zoom (see lib/zoom.ts), and zoom back into their window with Esc, the back button or by
  * scrolling up.
  *
  * Every page has a "slot" on a vertical line and the view sits at `pos` on that line: a page whose
  * slot is 1 while `pos` is 0 waits one screen below. A jump puts the target page one slot below (or
  * above) the current one and animates `pos` there, so any two pages can swap directly; pages that
  * take no part are parked out of sight (HIDDEN). Both are Motion values, so the pages, the
- * background and the 3D ribbon follow them 60 times a second without re-rendering React.
+ * background and the 3D scene follow them 60 times a second without re-rendering React. A window
+ * zoom moves `pos` too (evenly, over the zoom), so everything that only knows about slots still ends
+ * up in the right place; the pages and the scene draw the zoom itself from `zoom` and `zt`.
  */
 
 const WHEEL_THRESHOLD = 320; // px of wheel travel that triggers a jump (about 3 mouse-wheel notches)
@@ -31,12 +36,24 @@ export const HIDDEN = 1000; // the slot of pages that take no part in the curren
 export const JUMP_S = 1.25;
 const JUMP = { duration: JUMP_S, ease: [0.76, 0, 0.18, 1] as const };
 
+/** A window zoom in progress: page `page` opens from its window on the overview, or closes back into it. */
+export interface Zoom {
+  id: number;
+  page: number;
+  dir: ZoomDir;
+  rect: Rect; // the window's black card, in px, where the page shrinks to
+}
+
 export interface Pager {
   pos: MotionValue<number>; // where the view is on the line of slots
   slots: MotionValue<number[]>; // each page's slot (HIDDEN = out of sight)
   pull: MotionValue<number>; // -1..1: how close the current gesture is to the threshold
   index: number; // the page we're on (or heading to)
-  goTo: (i: number) => void;
+  /** Go to page `i`. `from` is the window that was clicked, if any (its page zooms out of it). */
+  goTo: (i: number, from?: Element | null) => void;
+  zoom: Zoom | null; // the window zoom in progress, if any
+  zt: MotionValue<number>; // ms since that zoom started
+  turn: { n: number; zoom: boolean }; // counts page changes; `zoom`: the last one was a window zoom
 }
 
 /** The pages on the scroll, in order (the ones without a parent). */
@@ -74,12 +91,35 @@ function scrollableAncestor(el: Element | null, root: Element, dy: number): HTML
   return null;
 }
 
+/**
+ * Where the black card of page `page`'s window sits on the overview when the overview is in place, in
+ * px. Measured from layout, so it's right even while the overview is parked off screen or fading.
+ */
+function windowRect(root: HTMLElement, page: number, from?: Element | null): Rect | null {
+  const card = from?.querySelector(".hero-card") ?? root.querySelector(`[data-window="${PAGE_IDS[page]}"] .hero-card`);
+  const section = root.querySelector('[data-page="0"]');
+  if (!(card instanceof HTMLElement) || !section) return null;
+  const parent = card.offsetParent;
+  if (!(parent instanceof HTMLElement)) return null; // not rendered
+  const p = parent.getBoundingClientRect(), s = section.getBoundingClientRect();
+  const w = card.offsetWidth, h = card.offsetHeight;
+  if (w < 8 || h < 8) return null;
+  // the window's own offset ignores the fade-in slide of the overview's content, so does this
+  const x = p.left - s.left + card.offsetLeft, y = p.top - s.top + card.offsetTop;
+  // keep it on screen (a scrolled phone layout can leave the window out of view)
+  const clamp = (v: number, max: number) => Math.max(0, Math.min(Math.max(0, max), v));
+  return { x: clamp(x, window.innerWidth - w), y: clamp(y, window.innerHeight - h), w, h };
+}
+
 export function usePager(rootRef: RefObject<HTMLElement | null>, reduceMotion: boolean): Pager {
   const count = PAGE_IDS.length;
   const [index, setIndex] = useState(() => Math.max(0, PAGE_IDS.indexOf(window.location.hash.slice(1))));
+  const [zoom, setZoom] = useState<Zoom | null>(null);
+  const [turn, setTurn] = useState({ n: 0, zoom: false });
   const pos = useMotionValue(0);
   const slots = useMotionValue<number[]>(PAGE_IDS.map((_, i) => (i === index ? 0 : HIDDEN)));
   const pull = useMotionValue(0);
+  const zt = useMotionValue(0);
 
   // Gesture bookkeeping changes on every wheel event, so it lives in a ref (no re-renders).
   const g = useRef({
@@ -92,6 +132,8 @@ export function usePager(rootRef: RefObject<HTMLElement | null>, reduceMotion: b
     animEnd: 0, // when the current jump animation finishes
     settle: 0, // timer id
     anim: null as { stop(): void } | null,
+    zoomId: 0,
+    zooming: false, // a window zoom runs to its end: nothing interrupts it
   });
 
   /** Park page `target` next to the current page (below it if it comes later in PAGES), the rest out of sight. */
@@ -107,10 +149,58 @@ export function usePager(rootRef: RefObject<HTMLElement | null>, reduceMotion: b
     [slots],
   );
 
-  const goTo = useCallback(
-    (i: number) => {
+  /** Open page `target` from its window on the overview, or close the current page back into it. */
+  const zoomTo = useCallback(
+    (target: number, dir: ZoomDir, from?: Element | null) => {
       const s = g.current;
+      const root = rootRef.current;
+      const page = dir === "open" ? target : s.index;
+      const rect = root && windowRect(root, page, from);
+      if (!rect) return false;
+      const ms = ZOOM_MS[dir];
+      const now = performance.now();
+      window.clearTimeout(s.settle);
+      s.acc = 0;
+      animate(pull, 0, { duration: 0.25 });
+      s.anim?.stop();
+      place(target);
+      s.zooming = true;
+      s.animEnd = now + ms;
+      s.lockStart = now;
+      s.lockUntil = now + ms;
+      const id = ++s.zoomId;
+      zt.set(0);
+      setZoom({ id, page, dir, rect });
+      s.index = target;
+      setIndex(target);
+      setTurn((t) => ({ n: t.n + 1, zoom: true }));
+      s.anim = animate(pos, slots.get()[target], { duration: ms / 1000, ease: "linear" });
+      animate(zt, ms, {
+        duration: ms / 1000,
+        ease: "linear",
+        onComplete: () => {
+          if (g.current.zoomId !== id) return;
+          g.current.zooming = false;
+          setZoom(null);
+        },
+      });
+      return true;
+    },
+    [rootRef, place, pos, slots, pull, zt],
+  );
+
+  const goTo = useCallback(
+    (i: number, from?: Element | null) => {
+      const s = g.current;
+      if (s.zooming) return;
       const target = Math.max(0, Math.min(count - 1, i));
+      // Between the overview and a page opened from one of its windows: the window zoom (when the
+      // view is at rest, give or take a creeping gesture).
+      const dir: ZoomDir | null =
+        s.index === 0 && parentOf(target) === 0 ? "open" : target === 0 && parentOf(s.index) === 0 ? "close" : null;
+      const atRest = Math.abs(pos.get() - slots.get()[s.index]) < 0.12;
+      if (dir && atRest && !reduceMotion && zoomTo(target, dir, from)) return;
+
       const now = performance.now();
       window.clearTimeout(s.settle);
       s.acc = 0;
@@ -125,9 +215,10 @@ export function usePager(rootRef: RefObject<HTMLElement | null>, reduceMotion: b
       if (target !== s.index) {
         s.index = target;
         setIndex(target);
+        setTurn((t) => ({ n: t.n + 1, zoom: false }));
       }
     },
-    [count, place, pos, slots, pull, reduceMotion],
+    [count, place, pos, slots, pull, reduceMotion, zoomTo],
   );
 
   /** Move part of the way toward the neighbouring page (`v` in -1..1 is the gesture's progress). */
@@ -291,5 +382,5 @@ export function usePager(rootRef: RefObject<HTMLElement | null>, reduceMotion: b
     window.history.replaceState(null, "", url);
   }, [index]);
 
-  return { pos, slots, pull, index, goTo };
+  return { pos, slots, pull, index, goTo, zoom, zt, turn };
 }

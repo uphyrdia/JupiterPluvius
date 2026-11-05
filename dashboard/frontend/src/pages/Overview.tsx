@@ -1,3 +1,4 @@
+import { motion, useTransform } from "motion/react";
 import { useMemo, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { AnimatedNumber } from "../components/AnimatedNumber";
 import { Icon, type IconName } from "../components/Icon";
@@ -12,6 +13,7 @@ import { ago, fmtClock, fmtHM } from "../lib/format";
 import { moistureFraction, moistureWord } from "../lib/moisture";
 import { stats, toPoints } from "../lib/series";
 import { AI_STATUS, linkStatus, type Tone } from "../lib/status";
+import { zoomFrame } from "../lib/zoom";
 import type { AnchorId } from "../scene/anchors";
 
 interface Props {
@@ -93,9 +95,26 @@ export function Overview({ telemetry, hours, ai, pager, active, compact }: Props
     `Faults · ${faults.length ? faults.join(", ") : "none"}`,
   ];
 
+  // During a window zoom (see lib/zoom.ts): --tile fades the window whose page opens or closes,
+  // --slide sends the other window off the screen as a page opens
+  const { zoom, zt } = pager;
+  const tile = useTransform(() => {
+    const t = zt.get();
+    return zoom ? zoomFrame(zoom.dir, t).tile : 1;
+  });
+  const slide = useTransform(() => {
+    const t = zt.get();
+    return zoom ? zoomFrame(zoom.dir, t).slide : 0;
+  });
+  const zoomRole = (page: string) => (!zoom ? undefined : PAGE_IDS[zoom.page] === page ? "origin" : "other");
+
   return (
     <PageFrame index={0} id="overview" pager={pager} active={active}>
-      <div className="ov">
+      <motion.div
+        className="ov"
+        data-zoom={zoom?.dir}
+        style={{ "--tile": tile, "--slide": slide } as unknown as CSSProperties}
+      >
         <div className="ov-brand reveal" style={d(0)}>
           <h1 id="overview-title" className="brand">
             <span className="brand-name">JUPITER PLUVIUS</span>
@@ -135,6 +154,7 @@ export function Overview({ telemetry, hours, ai, pager, active, compact }: Props
         <div className="ov-moisture">
           <Window
             page="trends" tab="Soil moisture" label="Sensor · soil ADC" go="Trends" delay={0.08} pager={pager}
+            zoom={zoomRole("trends")} side={-1}
             dot={<span className={`hero-dot status-${link.tone}`} title={link.label} />}
           >
             <p className="hero-value">
@@ -181,7 +201,7 @@ export function Overview({ telemetry, hours, ai, pager, active, compact }: Props
           </Window>
         </div>
         <div className="ov-corner">
-          <AiWindow ai={ai} hours={hours} readings={rows.length} pager={pager} />
+          <AiWindow ai={ai} hours={hours} readings={rows.length} pager={pager} zoom={zoomRole("analysis")} />
         </div>
 
         <div className="ov-callouts">
@@ -205,25 +225,35 @@ export function Overview({ telemetry, hours, ai, pager, active, compact }: Props
         </div>
 
         {!compact && <LeaderLines />}
-      </div>
+      </motion.div>
     </PageFrame>
   );
 }
 
+type ZoomRole = "origin" | "other" | undefined;
+
 /**
- * A black window with a tab on top. The whole window is a link to its page: a plain click plays
- * the page jump; a middle or Ctrl click still opens the page in a new tab.
+ * A black window with a tab on top. The whole window is a link to its page: a plain click zooms the
+ * page out of the window (see lib/zoom.ts); a middle or Ctrl click still opens the page in a new tab.
+ * `zoom` says what it does during a zoom; `side` is where it slides off to when the other one opens.
  */
-function Window({ page, tab, label, dot, go, delay, pager, children }: {
-  page: string; tab: string; label: string; dot: ReactNode; go: string; delay: number; pager: Pager; children: ReactNode;
+function Window({ page, tab, label, dot, go, delay, pager, zoom, side, children }: {
+  page: string; tab: string; label: string; dot: ReactNode; go: string; delay: number; pager: Pager;
+  zoom: ZoomRole; side: number; children: ReactNode;
 }) {
   const open = (e: MouseEvent<HTMLAnchorElement>) => {
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
-    pager.goTo(PAGE_IDS.indexOf(page));
+    pager.goTo(PAGE_IDS.indexOf(page), e.currentTarget);
   };
   return (
-    <a className={`win win-${page} reveal`} style={d(delay)} href={`#${page}`} onClick={open}>
+    <a
+      className={`win win-${page} reveal${zoom ? ` is-${zoom}` : ""}`}
+      style={{ ...d(delay), "--side": side } as CSSProperties}
+      href={`#${page}`}
+      data-window={page}
+      onClick={open}
+    >
       <span className="hero-tab">{tab}</span>
       <div className="hero-card">
         <div className="hero-top">
@@ -241,7 +271,9 @@ function Window({ page, tab, label, dot, go, delay, pager, children }: {
 }
 
 /** The AI check-up window: the latest report's verdict, or what's happening instead. */
-function AiWindow({ ai, hours, readings, pager }: { ai: AiState; hours: number; readings: number; pager: Pager }) {
+function AiWindow({ ai, hours, readings, pager, zoom }: {
+  ai: AiState; hours: number; readings: number; pager: Pager; zoom: ZoomRole;
+}) {
   let tone: Tone = "muted";
   let icon: IconName | null = null;
   let title = "No report yet";
@@ -275,7 +307,7 @@ function AiWindow({ ai, hours, readings, pager }: { ai: AiState; hours: number; 
   return (
     <Window
       page="analysis" tab="AI check-up" label={`DeepSeek · last ${ai.phase === "idle" ? hours : ai.hours} h`}
-      go="Analysis" delay={0.14} pager={pager}
+      go="Analysis" delay={0.14} pager={pager} zoom={zoom} side={1}
       dot={<span className={`hero-dot status-${tone}${ai.phase === "running" ? " is-pulsing" : ""}`} />}
     >
       <p className={`ai-win-title status-${tone}`}>

@@ -45,7 +45,7 @@ FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 app = FastAPI(title="JupiterPluvius API")
 # Allows the frontend to be hosted elsewhere (e.g. a Render Static Site) too.
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"], allow_headers=["*"])
-# Compress responses: the 3D library shrinks from ~700 kB to ~180 kB, 1000 readings to ~30 kB.
+# Compress responses: the 3D chunk shrinks from ~790 kB to ~240 kB, 1000 readings to ~30 kB.
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 

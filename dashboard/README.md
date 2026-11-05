@@ -103,11 +103,18 @@ already allows cross-origin requests.
 ## The frontend
 
 Four full-screen pages, all in the same paper-and-ink colours. **Overview** shows the live readings around a 3D
-infinity sign whose colour shows the soil moisture, plus two black windows: the soil moisture window (left) opens
-**Trends** (charts) and the AI check-up window (top right) opens **Analysis**. Scrolling only moves between the overview and **Log** (states
-over time, recent readings): the page first creeps and resists, and past a threshold it jumps. Every move plays the same
-glitch transition. On Trends and Analysis, Esc, the "Overview" button or scrolling up goes back. Arrow keys, Page Up/Down,
-Space and Home/End also work, as do swipes on a phone.
+infinity sign (rhine-lock's, see below), plus two black windows: the soil moisture window (left) opens **Trends**
+(charts) and the AI check-up window (top right) opens **Analysis**.
+
+- **The windows zoom.** Click one and it turns into a small picture of its page, which flies out to fill the screen
+  while the rest of the overview fades and the infinity "unlocks" (its fins peel off and fly apart). Esc, the
+  "Overview" button or scrolling up plays it backwards: the page shrinks into its window and the infinity draws
+  itself in again. This is rhine-lock's unlock and lock animation, with the same timings.
+- **Scrolling** only moves between the overview and **Log** (states over time, recent readings): the page first creeps
+  and resists, and past a threshold it jumps, with a glitch burst.
+
+Arrow keys, Page Up/Down, Space and Home/End also work, as do swipes on a phone. With "reduce motion" turned on in the
+system settings, pages simply fade.
 
 | Library | Used for |
 |---|---|
@@ -115,7 +122,8 @@ Space and Home/End also work, as do swipes on a phone.
 | [TypeScript](https://www.typescriptlang.org) | types for the data and props |
 | [Vite](https://vite.dev) | dev server and production build |
 | [Motion](https://motion.dev) | the view position as an animated value, and the page transitions |
-| [three.js](https://threejs.org) + [React Three Fiber](https://r3f.docs.pmnd.rs) | the 3D ribbon (WebGL) |
+| [three.js](https://threejs.org) | the 3D infinity (WebGL 2) |
+| [postprocessing](https://github.com/pmndrs/postprocessing) + [n8ao](https://github.com/N8python/n8ao) | its depth of field and ambient occlusion |
 | [d3-scale / d3-shape](https://d3js.org) | chart maths; the charts themselves are plain SVG |
 | [Fontsource](https://fontsource.org) | Montserrat and JetBrains Mono, served with the app |
 
@@ -129,20 +137,32 @@ src/
   hooks/
     useTelemetry.ts     loads readings, then polls /api/latest and fetches only new rows
     useAiCheckup.ts     the AI check-up request and its idle/running/done/error states
-    usePager.ts         wheel/touch/keyboard/clicks -> the "resist, then jump" page navigation
+    usePager.ts         wheel/touch/keyboard/clicks -> page navigation ("resist, then jump", and the window zoom)
   pages/                Overview, Trends, Analysis, Log
   charts/               LineChart (SVG + d3), StatesTimeline, ReadingsTable
-  components/           Chrome (top bar, rail, bottom bar), Backdrop, GlitchBurst, PageFrame, ...
-  scene/                the 3D ribbon on the overview: poses.ts (where it sits), Ribbon.tsx, ribbonShader.ts
-  lib/                  API client and types, formatting, moisture maths, status labels
+  components/           Chrome (top bar, rail, bottom bar), Backdrop, GlitchBurst, PageFrame, ZoomExtras, ...
+  scene/                the 3D infinity: Stage.ts (renderer, camera, lights, post-processing), finShaders.ts,
+                        framing.ts (where it sits), Scene.tsx (the React side), studio.hdr (its light probe)
+  lib/                  API client and types, formatting, moisture maths, status labels, zoom.ts (the window zoom)
   styles/               base.css (tokens, layers), chrome.css, pages.css
 ```
 
-The ribbon only appears on the overview. When you leave the page, it drifts up and fades out with it, and the 3D scene
-stops rendering until you come back. It is one box shape drawn about 460 times with a custom shader (one draw call).
-Each slat works out its own place on the curve, so the band can breathe and twist. Its colour goes from white-ish blue
-(dry) to deep ultramarine (wet).
+### The infinity
+
+The infinity on the overview is the ∞ sculpture from [rhine-lock](https://github.com/tmc5csxr9m-cpu/rhine-lock),
+a screen locker by tmc5csxr9m-cpu: 400 rounded square fins on a figure-eight, lit by a key light, a fill light and a
+light probe, with shadows, ambient occlusion and depth of field. Its renderer, shaders, colours and motion are ported
+unchanged (`scene/Stage.ts`, `scene/finShaders.ts`, `scene/studio.hdr`), with three differences: the picture is
+mirrored, so the smaller loop is on the left; it's drawn on the dashboard's own paper (a transparent canvas); and
+rhine-lock's 16:9 frame is placed where the old ribbon was, by a lens shift that doesn't change how it looks. It
+draws itself in on the first visit, slides and fades with the overview when you scroll to the log, and stops rendering
+while the overview is away. It needs WebGL 2; without it the dashboard works the same, minus the infinity.
+
+**Licence:** rhine-lock is GNU AGPL-3.0-or-later, so these ported files are too, and so is anything that includes them.
+In particular, because the dashboard is served to other people over a network (Render), the AGPL asks that its complete
+source code be offered to them, for example with a link to this repository.
 
 While `npm run dev` is running, a few URL parameters help with design work (they don't exist in the production build):
-`?m=0.2` pretends the soil moisture is 20 %, `?p=0.5#trends` freezes the view halfway from the overview to the page in
-the hash, and `?still` skips fade-ins.
+`?p=0.5#trends` freezes the view halfway from the overview to the page in the hash, and `?still` skips fade-ins and
+the infinity drawing itself in. In any build, `?q=low|high|ultra` sets the 3D quality (rhine-lock's setting; the default
+is ultra on the desktop layout and high on phones; low drops shadows, ambient occlusion and depth of field).

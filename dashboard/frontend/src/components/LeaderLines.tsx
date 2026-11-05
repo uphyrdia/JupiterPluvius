@@ -3,9 +3,10 @@ import { useRef, type CSSProperties } from "react";
 import { ANCHORS, anchorBus } from "../scene/anchors";
 
 /**
- * Thin lines from each overview callout (its `data-pin` dot) to a slat on the 3D infinity.
- * Both ends move every frame (the ribbon breathes, the page slides), so the SVG is updated
- * directly in an animation-frame loop rather than through React state.
+ * Thin lines from each overview callout (its `data-pin` dot) to a point on the 3D infinity.
+ * Both ends move every frame (the sculpture rocks, the page slides), so the SVG is updated
+ * directly in an animation-frame loop rather than through React state. A line only shows once the
+ * band is there at its point (the ∞ draws itself in, and peels away when a window opens).
  */
 export function LeaderLines() {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -29,8 +30,9 @@ export function LeaderLines() {
       const y1 = r.top + r.height / 2 - box.top;
       const x2 = anchorBus.xy[2 * j] - box.left;
       const y2 = anchorBus.xy[2 * j + 1] - box.top;
-      const g = svg.querySelector(`[data-line="${id}"]`);
+      const g = svg.querySelector<SVGGElement>(`[data-line="${id}"]`);
       if (!g) return;
+      g.style.opacity = String(anchorBus.drawn[j]);
       const [line, dot, ring] = g.children;
       line.setAttribute("x1", String(x1));
       line.setAttribute("y1", String(y1));

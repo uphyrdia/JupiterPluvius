@@ -69,10 +69,9 @@
   min-height: 620px;
   /* Right edge of the text column on the left (dossier, event feed) */
   --column-end: min(21vw, var(--pad-x) + 280px);
-  /* How far the infinity ever reaches: left, and right at the light callout's height. These mirror the
-     overview pose in scene/poses.ts (centre 12vw right of the middle, radius min(23.5vw, 43vh)): with the
-     band's width, the rocking and the perspective, its outermost slats reach 1.25 radii left of the centre
-     and 1.18 radii right. Update them if you move or resize it there. */
+  /* How far the infinity ever reaches, left and right. These mirror scene/framing.ts, which places the
+     sculpture so that, rocking included, it spans 62vw − 1.25r to 62vw + 1.18r, r = min(23.5vw, 43vh).
+     Update them together. */
   --ribbon-left: calc(62vw - 1.25 * min(23.5vw, 43vh));
   --ribbon-right: calc(62vw + 1.18 * min(23.5vw, 43vh));
   /* Both windows are --hero-w wide. The soil moisture window sits just clear of the infinity, but
@@ -219,6 +218,17 @@
 }
 .win:active .hero-card {
   transform: translateY(-1px);
+}
+/* During a window zoom (see lib/zoom.ts): the window whose page opens (or closes back) fades as the
+   page takes its place (--tile); as a page opens, the other window slides off the screen, the way
+   rhine-lock's personnel panel leaves (--slide, eased in, fading only at the very end). */
+.ov[data-zoom] .win.is-origin {
+  opacity: var(--tile);
+  translate: none;
+}
+.ov[data-zoom="open"] .win.is-other {
+  opacity: calc(1 - clamp(0, (var(--slide) - 0.85) / 0.15, 1));
+  translate: calc(var(--side) * var(--slide) * var(--slide) * var(--slide) * 50vw) 0;
 }
 .hero-tab {
   display: inline-block;

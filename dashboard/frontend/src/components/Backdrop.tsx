@@ -1,6 +1,7 @@
 import { motion, useTransform } from "motion/react";
 import { PAGE_IDS } from "../config";
 import { presence, usePageOffset, type Pager } from "../hooks/usePager";
+import { zoomFrame } from "../lib/zoom";
 
 const ANALYSIS = PAGE_IDS.indexOf("analysis");
 const LOG = PAGE_IDS.indexOf("log");
@@ -8,13 +9,21 @@ const LOG = PAGE_IDS.indexOf("log");
 /**
  * The layer behind everything (the same paper on every page): a vignette, a dot grid, grain, and
  * the orbital HUD that turns behind the analysis and, fainter and larger, the log.
+ * When the analysis zooms out of its window, the HUD only comes on as the page lands (and goes off
+ * as it leaves), so it never shows around the flying page.
  */
 export function Backdrop({ pager, busy }: { pager: Pager; busy: boolean }) {
   const analysis = usePageOffset(pager, ANALYSIS);
   const log = usePageOffset(pager, LOG);
-  const orbit = useTransform(() => Math.max(presence(analysis.get()), 0.28 * presence(log.get())));
-  const onAnalysis = () => presence(analysis.get()) >= presence(log.get());
-  const orbitScale = useTransform(() => (onAnalysis() ? 0.86 + 0.14 * presence(analysis.get()) : 1.3));
+  const { zoom, zt } = pager;
+  const shown = () => {
+    const a = presence(analysis.get());
+    const t = zt.get();
+    return zoom?.page === ANALYSIS ? 1 - zoomFrame(zoom.dir, t).paper : a;
+  };
+  const orbit = useTransform(() => Math.max(shown(), 0.28 * presence(log.get())));
+  const onAnalysis = () => shown() >= presence(log.get());
+  const orbitScale = useTransform(() => (onAnalysis() ? 0.86 + 0.14 * shown() : 1.3));
   const orbitX = useTransform(() => (onAnalysis() ? "0vw" : "-14vw"));
 
   return (
