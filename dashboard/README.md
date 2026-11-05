@@ -152,9 +152,13 @@ src/
 The infinity on the overview is the ∞ sculpture from [rhine-lock](https://github.com/tmc5csxr9m-cpu/rhine-lock),
 a screen locker by tmc5csxr9m-cpu: 400 rounded square fins on a figure-eight, lit by a key light, a fill light and a
 light probe, with shadows, ambient occlusion and depth of field. Its renderer, shaders, colours and motion are ported
-unchanged (`scene/Stage.ts`, `scene/finShaders.ts`, `scene/studio.hdr`), with three differences: the picture is
-mirrored, so the smaller loop is on the left; it's drawn on the dashboard's own paper (a transparent canvas); and
-rhine-lock's 16:9 frame is placed where the old ribbon was, by a lens shift that doesn't change how it looks. It
+unchanged (`scene/Stage.ts`, `scene/finShaders.ts`, `scene/studio.hdr`), with four differences: the picture is
+mirrored, so the smaller loop is on the left; it's drawn on the dashboard's own paper (a transparent canvas);
+rhine-lock's 16:9 frame is placed where the old ribbon was, by a lens shift that doesn't change how it looks; and
+the band's joint is closed. rhine-lock's band turns one and a half times per loop while every slat leans toward the
+same face, so where the band closes, the slats on either side lean opposite ways; rhine-lock hides that joint behind
+its login panel. Mirrored, it would sit in plain view at the far end of the left loop, so there the band turns back
+half a turn, and the slats line up all the way round. It
 draws itself in on the first visit, slides and fades with the overview when you scroll to the log, and stops rendering
 while the overview is away. It needs WebGL 2; without it the dashboard works the same, minus the infinity.
 

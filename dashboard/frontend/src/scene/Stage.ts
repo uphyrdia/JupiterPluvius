@@ -10,6 +10,8 @@
  *  - rhine-lock fills its screen with a 16:9 frame. Here `frame` says where that frame sits and how big
  *    it is; it's applied as a lens shift, so the sculpture looks exactly the same, just elsewhere.
  *  - The canvas is transparent and the dashboard's own paper shows through (see the grade in finShaders.ts).
+ *  - The band's joint, which rhine-lock hides behind its login panel and the mirrored picture would show,
+ *    is closed (rl_joint in finShaders.ts).
  *  - No card stream and no look-dev URL overrides; the render loop pauses while the overview is away.
  */
 import { N8AOPostPass } from "n8ao";

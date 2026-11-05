@@ -2,7 +2,8 @@
  * GLSL for the ∞ fin sculpture on the overview.
  *
  * Ported from rhine-lock (https://github.com/tmc5csxr9m-cpu/rhine-lock, frontend/src/lib/scene/shaders.ts),
- * a GNU AGPL-3.0-or-later project; this file stays under that licence. The fin shaders are unchanged.
+ * a GNU AGPL-3.0-or-later project; this file stays under that licence. The fin shaders are unchanged
+ * but for the joint where the band closes (see rl_joint), which rhine-lock hides behind its login panel.
  * The final grade differs in three ways: it draws onto the dashboard's own paper (a transparent canvas)
  * instead of painting rhine-lock's paper; its vignette and chromatic aberration are measured in
  * rhine-lock's 16:9 frame (uFrame), wherever the dashboard puts that frame; and the card stream that
@@ -54,6 +55,21 @@ float rl_easeOutBack(float x) {
     return 1.0 + c3 * pow(x - 1.0, 3.0) + c1 * pow(x - 1.0, 2.0);
 }
 
+// The joint (the one change to rhine-lock's fins). uTwist = 1.5 turns the band one and a half times per
+// loop, so after one loop its two faces have swapped, like a Möbius strip's; but every fin leans toward
+// the same face (uLean). So rhine-lock's band has a joint at t = 0, where the fins on either side lean
+// opposite ways; its login panel hides it. Mirrored, it would sit in plain view at the far end of the
+// dashboard's left loop, so here the band turns back half a turn over |t| < JOINT_SPAN around t = 0:
+// the faces line up again, and every fin matches its neighbours all the way round. Elsewhere the band
+// twists exactly as rhine-lock's (and at JOINT_SPAN = 1.3 almost all of the change stays in the stretch
+// its panel covers).
+const float JOINT_SPAN = 1.3;
+float rl_joint(float t) {
+    float s = t < 3.14159265 ? t : t - 6.2831853; // -pi..pi along the band, 0 at the joint
+    float side = s >= 0.0 ? 1.0 : -1.0;
+    return 1.5707963 * (side - sin(1.5707963 * clamp(s / JOINT_SPAN, -1.0, 1.0)));
+}
+
 void rl_finTransform(in vec3 lp, in vec3 nrm, out vec3 worldPos, out vec3 worldNrm) {
     float idx = aIndex;
     float seed = rl_hash11(idx * 1.618 + 4.7);
@@ -79,8 +95,10 @@ void rl_finTransform(in vec3 lp, in vec3 nrm, out vec3 worldPos, out vec3 worldN
     pulse = min(pulse, 1.4);
 
     float wave = sin(2.0 * t - uTime * 0.55) * 0.55 + sin(5.0 * t + uTime * 0.31) * 0.12;
-    float phi = uTwist * t + wave + uSpin + pulse * 1.3;
-    phi = mix(phi, 1.5707963, uAlign);
+    float phi = uTwist * t + rl_joint(t) + wave + uSpin + pulse * 1.3;
+    // Aligning (the granted flash) pulls the fins toward phi = pi/2, as in rhine-lock, but keeps the
+    // one full turn the band now makes per loop (1.5 - 0.5 at the joint), so the joint stays closed.
+    phi = t + mix(phi - t, 1.5707963, uAlign);
     phi += (seed - 0.5) * uDisorder * 3.0 + sin(uTime * 9.0 + seed * 40.0) * uDisorder * 0.2;
 
     vec3 W = cos(phi) * N0 + sin(phi) * B0;
