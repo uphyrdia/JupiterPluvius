@@ -103,8 +103,8 @@ already allows cross-origin requests.
 ## The frontend
 
 Four full-screen pages, all in the same paper-and-ink colours. **Overview** shows the live readings around a 3D
-infinity sign whose colour shows the soil moisture, plus two black windows: the soil moisture window opens **Trends**
-(charts) and the AI check-up window opens **Analysis**. Scrolling only moves between the overview and **Log** (states
+infinity sign whose colour shows the soil moisture, plus two black windows: the soil moisture window (left) opens
+**Trends** (charts) and the AI check-up window (top right) opens **Analysis**. Scrolling only moves between the overview and **Log** (states
 over time, recent readings): the page first creeps and resists, and past a threshold it jumps. Every move plays the same
 glitch transition. On Trends and Analysis, Esc, the "Overview" button or scrolling up goes back. Arrow keys, Page Up/Down,
 Space and Home/End also work, as do swipes on a phone.

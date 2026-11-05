@@ -130,8 +130,9 @@ export function Overview({ telemetry, hours, ai, pager, active, compact }: Props
 
         <div className="ov-divider reveal" style={d(0.05)} aria-hidden="true" />
 
-        {/* The two black windows: each opens its own page */}
-        <div className="ov-windows">
+        {/* Two black windows, each opening its own page: soil moisture left of the infinity, and
+            the AI check-up in the top right corner */}
+        <div className="ov-moisture">
           <Window
             page="trends" tab="Soil moisture" label="Sensor · soil ADC" go="Trends" delay={0.08} pager={pager}
             dot={<span className={`hero-dot status-${link.tone}`} title={link.label} />}
@@ -178,7 +179,8 @@ export function Overview({ telemetry, hours, ai, pager, active, compact }: Props
               </div>
             </dl>
           </Window>
-
+        </div>
+        <div className="ov-corner">
           <AiWindow ai={ai} hours={hours} readings={rows.length} pager={pager} />
         </div>
 
