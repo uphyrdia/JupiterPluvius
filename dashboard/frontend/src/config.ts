@@ -13,10 +13,17 @@ export const CONFIG = {
 export const RANGES = [1, 24] as const;
 export const DEFAULT_HOURS = 24;
 
-/** The dashboard's full-screen "pages", in scroll order. `id` doubles as the URL hash (#trends). */
-export const PAGES = [
+/**
+ * The dashboard's full-screen "pages". `id` doubles as the URL hash (#trends). Pages without a
+ * `parent` form the scroll (overview <-> log); the others open from a window on their parent page
+ * and come back to it. Earlier pages in this list sit above later ones when the view slides.
+ */
+export const PAGES: readonly { id: string; label: string; parent?: string }[] = [
   { id: "overview", label: "Overview" },
-  { id: "trends", label: "Trends" },
-  { id: "analysis", label: "Analysis" },
+  { id: "trends", label: "Trends", parent: "overview" }, // the soil moisture window
+  { id: "analysis", label: "Analysis", parent: "overview" }, // the AI check-up window
   { id: "log", label: "Log" },
-] as const;
+];
+export const PAGE_IDS = PAGES.map((p) => p.id);
+/** Index of the page a detail page returns to, or -1 for the pages on the scroll. */
+export const parentOf = (i: number) => PAGE_IDS.indexOf(PAGES[i]?.parent ?? "");

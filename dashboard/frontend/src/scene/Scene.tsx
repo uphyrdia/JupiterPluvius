@@ -1,17 +1,18 @@
 import { Canvas } from "@react-three/fiber";
 import { motion, useMotionValueEvent, useTransform, type MotionValue } from "motion/react";
 import { useRef, useState } from "react";
+import { presence } from "../hooks/usePager";
 import { anchorBus } from "./anchors";
 import { Ribbon } from "./Ribbon";
 
 export interface SceneProps {
-  progress: MotionValue<number>;
+  offset: MotionValue<number>; // how far the overview is from the view, in pages (see usePager)
   moisture: number | null;
   compact: boolean;
   reduceMotion: boolean;
 }
 
-const GONE_AT = 0.82; // like the overview's own content (see PageFrame), gone 0.82 pages away
+const GONE_AT = 0.82; // like the overview's own content (see usePager's `presence`), gone 0.82 pages away
 
 /**
  * The WebGL layer behind the pages. It's loaded lazily (see App.tsx), so the dashboard's text and
@@ -20,14 +21,14 @@ const GONE_AT = 0.82; // like the overview's own content (see PageFrame), gone 0
  * rendering until you come back.
  */
 export default function Scene(props: SceneProps) {
-  const { progress } = props;
+  const { offset } = props;
   const [ready, setReady] = useState(false);
-  const [awake, setAwake] = useState(() => progress.get() < GONE_AT);
+  const [awake, setAwake] = useState(() => Math.abs(offset.get()) < GONE_AT);
   const awakeRef = useRef(awake);
-  const opacity = useTransform(progress, (p) => Math.min(1, Math.max(0, 1 - p / GONE_AT)));
+  const opacity = useTransform(offset, presence);
 
-  useMotionValueEvent(progress, "change", (p) => {
-    const on = p < GONE_AT;
+  useMotionValueEvent(offset, "change", (o) => {
+    const on = Math.abs(o) < GONE_AT;
     if (on === awakeRef.current) return;
     awakeRef.current = on;
     if (!on) anchorBus.visible = false; // the ribbon stops updating it once the frame loop stops

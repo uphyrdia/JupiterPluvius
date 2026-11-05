@@ -1,30 +1,31 @@
-import { motion, useTransform, type MotionValue } from "motion/react";
-import { THEME_AT, THEME_STOPS, themeValues } from "../lib/theme";
+import { motion, useTransform } from "motion/react";
+import { PAGE_IDS } from "../config";
+import { presence, usePageOffset, type Pager } from "../hooks/usePager";
+
+const ANALYSIS = PAGE_IDS.indexOf("analysis");
+const LOG = PAGE_IDS.indexOf("log");
 
 /**
- * The layer behind everything: the page colour (which drifts from paper-white to deep blue as you
- * scroll), dot grids, a soft glow, grain, and the orbital HUD that appears on the dark pages.
+ * The layer behind everything (the same paper on every page): a vignette, a dot grid, grain, and
+ * the orbital HUD that turns behind the analysis and, fainter and larger, the log.
  */
-export function Backdrop({ progress, busy }: { progress: MotionValue<number>; busy: boolean }) {
-  const bg = useTransform(progress, THEME_AT, themeValues(THEME_STOPS.bg));
-  const paper = useTransform(progress, [0, 1, 1.28, 1.6], [1, 1, 0.6, 0]); // light pages: vignette + ink dots
-  const night = useTransform(progress, [1.4, 1.75], [0, 1]); // dark pages: light dots
-  const glow = useTransform(progress, [1.4, 2, 3], [0, 1, 0.5]);
-  const orbit = useTransform(progress, [1.45, 2, 2.6, 3], [0, 1, 0.35, 0.2]);
-  const orbitScale = useTransform(progress, [1, 2, 3], [0.82, 1, 1.3]);
-  const orbitX = useTransform(progress, [1, 2, 3], ["8vw", "0vw", "-14vw"]);
+export function Backdrop({ pager, busy }: { pager: Pager; busy: boolean }) {
+  const analysis = usePageOffset(pager, ANALYSIS);
+  const log = usePageOffset(pager, LOG);
+  const orbit = useTransform(() => Math.max(presence(analysis.get()), 0.28 * presence(log.get())));
+  const onAnalysis = () => presence(analysis.get()) >= presence(log.get());
+  const orbitScale = useTransform(() => (onAnalysis() ? 0.86 + 0.14 * presence(analysis.get()) : 1.3));
+  const orbitX = useTransform(() => (onAnalysis() ? "0vw" : "-14vw"));
 
   return (
-    <motion.div className={`backdrop${busy ? " is-busy" : ""}`} style={{ backgroundColor: bg }} aria-hidden="true">
-      <motion.div className="bd-paper" style={{ opacity: paper }} />
-      <motion.div className="bd-dots bd-dots-ink" style={{ opacity: paper }} />
-      <motion.div className="bd-dots bd-dots-light" style={{ opacity: night }} />
-      <motion.div className="bd-glow" style={{ opacity: glow }} />
+    <div className={`backdrop${busy ? " is-busy" : ""}`} aria-hidden="true">
+      <div className="bd-paper" />
+      <div className="bd-dots" />
       <motion.div className="bd-orbit" style={{ opacity: orbit, scale: orbitScale, x: orbitX }}>
         <OrbitHud />
       </motion.div>
       <div className="bd-grain" />
-    </motion.div>
+    </div>
   );
 }
 

@@ -25,7 +25,7 @@
   --bottom: 76px; /* room for the bottom bar */
   --rail: 176px; /* room for the section rail on the right */
 
-  /* Theme defaults; App.tsx keeps overriding these as you scroll (see lib/theme.ts) */
+  /* Colours: the same paper and ink on every page (scene/Ribbon.tsx repeats --bg for the 3D haze) */
   --bg: #ebeae6;
   --ink: #141414;
   --ink-2: #4b4b48;
@@ -154,24 +154,11 @@ button {
 .bd-dots {
   position: absolute;
   inset: 0;
+  background-image: radial-gradient(circle, rgba(20, 20, 20, 0.2) 1px, transparent 1.3px);
   background-size: 26px 26px;
   background-position: center;
   -webkit-mask-image: radial-gradient(ellipse 85% 80% at 50% 50%, #000 35%, transparent 100%);
   mask-image: radial-gradient(ellipse 85% 80% at 50% 50%, #000 35%, transparent 100%);
-}
-.bd-dots-ink {
-  background-image: radial-gradient(circle, rgba(20, 20, 20, 0.2) 1px, transparent 1.3px);
-}
-.bd-dots-light {
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.22) 1px, transparent 1.3px);
-}
-.bd-glow {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 55% 45% at 92% 0%, rgba(176, 104, 190, 0.6), transparent 70%),
-    radial-gradient(ellipse 75% 50% at 50% 110%, rgba(70, 128, 255, 0.55), transparent 70%),
-    radial-gradient(ellipse 50% 70% at -5% 45%, rgba(4, 8, 52, 0.65), transparent 70%);
 }
 .bd-orbit {
   position: absolute;
@@ -184,26 +171,27 @@ button {
   height: auto;
   overflow: visible;
 }
+/* Drawn in the ink colour, like the overview's leader lines */
 .orbit line,
 .orbit circle,
 .orbit path {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.45);
+  stroke: rgba(20, 20, 20, 0.26);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
 .orbit .faint {
-  stroke: rgba(255, 255, 255, 0.24);
+  stroke: rgba(20, 20, 20, 0.14);
 }
 .orbit .bright {
-  stroke: rgba(255, 255, 255, 0.85);
+  stroke: rgba(20, 20, 20, 0.5);
   stroke-width: 1.4;
 }
 .orbit .dash {
   stroke-dasharray: 2 7;
 }
 .orbit .solid {
-  fill: #fff;
+  fill: var(--ink);
   stroke: none;
 }
 .orbit-spin {

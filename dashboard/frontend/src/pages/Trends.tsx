@@ -1,9 +1,10 @@
-import type { MotionValue } from "motion/react";
 import { useMemo, useState, type CSSProperties } from "react";
 import { ChartPanel } from "../charts/ChartPanel";
 import { LineChart } from "../charts/LineChart";
 import { PageFrame } from "../components/PageFrame";
 import { PageHeader } from "../components/PageHeader";
+import { PAGE_IDS, parentOf } from "../config";
+import type { Pager } from "../hooks/usePager";
 import type { Telemetry } from "../hooks/useTelemetry";
 import { moisturePct } from "../lib/moisture";
 import { gapMs, toPoints } from "../lib/series";
@@ -12,16 +13,21 @@ interface Props {
   telemetry: Telemetry;
   hours: number;
   includeTest: boolean;
-  progress: MotionValue<number>;
+  pager: Pager;
   active: boolean;
 }
 
+const INDEX = PAGE_IDS.indexOf("trends");
+
 // Checked as a set for colour-blind separation; orange and aqua are under 3:1 contrast on the
-// panels, which is why each chart also prints its value in the panel header (and page 4 has a table).
+// panels, which is why each chart also prints its value in the panel header (and the log has a table).
 const COLORS = { moist: "#2b47e6", temp: "#eb6834", hum: "#1baf7a" };
 
-/** Page 2: soil moisture, temperature and humidity over the selected range, with a shared crosshair. */
-export function Trends({ telemetry, hours, includeTest, progress, active }: Props) {
+/**
+ * Soil moisture, temperature and humidity over the selected range, with a shared crosshair.
+ * Opens from the overview's soil moisture window.
+ */
+export function Trends({ telemetry, hours, includeTest, pager, active }: Props) {
   const { rows, loading, updatedAt } = telemetry;
   const [hoverT, setHoverT] = useState<number | null>(null);
 
@@ -32,9 +38,12 @@ export function Trends({ telemetry, hours, includeTest, progress, active }: Prop
   const shared = { x0: updatedAt - hours * 3600e3, x1: updatedAt, gap, hoverT, onHover: setHoverT };
 
   return (
-    <PageFrame index={1} id="trends" progress={progress} active={active}>
+    <PageFrame index={INDEX} id="trends" pager={pager} active={active}>
       <div className="tr">
-        <PageHeader n={2} id="trends" title="Trends" kicker={`Sensor history · last ${hours} h`} active={active}>
+        <PageHeader
+          id="trends" title="Trends" kicker={`Sensor history · last ${hours} h`} active={active}
+          onBack={() => pager.goTo(parentOf(INDEX))}
+        >
           <p className="ph-meta micro">
             {rows.length} readings{rows.length >= 1000 ? " (evenly thinned)" : ""} ·{" "}
             {includeTest ? "test data included" : "real readings only"}

@@ -3,25 +3,25 @@ import type { MotionValue } from "motion/react";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { moistureColor, moistureEdge } from "../lib/moisture";
-import { rgbAt, THEME_STOPS } from "../lib/theme";
 import { ANCHORS, anchorBus } from "./anchors";
 import { overviewPose } from "./poses";
 import { makePoseUniform, rand, slatCenter, writePose, type PoseUniform } from "./ribbonMath";
 import { fragmentShader, vertexShader } from "./ribbonShader";
 
 const PAGE_SLIDE = 0.12; // pages slide 12vh per page as you move between them (see PageFrame)
+const PAGE_BG = "#ebeae6"; // --bg in base.css: the far slats fade toward it
 const ORIGIN = new THREE.Vector3();
 const point = new THREE.Vector3();
 
 interface Props {
-  progress: MotionValue<number>;
+  offset: MotionValue<number>; // how far the overview is from the view, in pages
   moisture: number | null;
   compact: boolean;
   reduceMotion: boolean;
 }
 
-/** The infinity sign made of thin slats on the overview. As you leave the page, it slides up with it. */
-export function Ribbon({ progress, moisture, compact, reduceMotion }: Props) {
+/** The infinity sign made of thin slats on the overview. As you leave the page, it slides away with it. */
+export function Ribbon({ offset, moisture, compact, reduceMotion }: Props) {
   const count = compact ? 340 : 460;
 
   // Built once per slat count: one box geometry drawn `count` times, plus the shader material.
@@ -42,7 +42,7 @@ export function Ribbon({ progress, moisture, compact, reduceMotion }: Props) {
         uPose: { value: makePoseUniform() },
         uTime: { value: 0 },
         uCount: { value: count },
-        uBg: { value: new THREE.Color() },
+        uBg: { value: new THREE.Color(PAGE_BG) },
         uLight: { value: new THREE.Vector3(-0.35, 0.55, 0.75).normalize() },
       },
     });
@@ -75,16 +75,15 @@ export function Ribbon({ progress, moisture, compact, reduceMotion }: Props) {
     L.edge.lerp(target.edge, k);
 
     const uniforms = (mesh.material as THREE.ShaderMaterial).uniforms;
-    const p = Math.min(1, progress.get()); // only the overview and the way off it matter here
+    // The page above the view (offset < 0) has slid up: lift the figure by as much (world y is up).
+    const o = Math.max(-1, Math.min(1, offset.get()));
     const vp = state.viewport.getCurrentViewport(state.camera, ORIGIN);
     const pose = uniforms.uPose.value as PoseUniform;
-    writePose(pose, overviewPose(vp.width, vp.height, compact), L.time, count, p * PAGE_SLIDE * vp.height, L.color, L.edge);
+    writePose(pose, overviewPose(vp.width, vp.height, compact), L.time, count, -o * PAGE_SLIDE * vp.height, L.color, L.edge);
     uniforms.uTime.value = L.time;
-    const [r, g, b] = rgbAt(THEME_STOPS.bg, p);
-    (uniforms.uBg.value as THREE.Color).setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
 
     // Screen positions of the slats the overview's leader lines point at.
-    anchorBus.visible = p < 0.98;
+    anchorBus.visible = Math.abs(o) < 0.98;
     if (anchorBus.visible) {
       ANCHORS.forEach(({ u }, j) => {
         const i = Math.round(u * count) % count;

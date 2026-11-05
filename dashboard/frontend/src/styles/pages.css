@@ -1,18 +1,11 @@
 /* ===========================================================================
-   Page header (pages 2-4, see components/PageHeader.tsx)
+   Page header (trends, analysis, log; see components/PageHeader.tsx)
    =========================================================================== */
 .ph {
   display: flex;
   align-items: flex-end;
   gap: clamp(14px, 2vw, 30px);
   margin-bottom: clamp(16px, 2.6vh, 30px);
-}
-.ph-num {
-  flex: none;
-  font: 200 clamp(64px, 8vw, 124px)/0.78 var(--font-sans);
-  letter-spacing: -0.03em;
-  color: transparent;
-  -webkit-text-stroke: 1px var(--ink);
 }
 .ph-body {
   display: grid;
@@ -22,6 +15,24 @@
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.ph-back {
+  gap: 6px;
+  padding: 5px 9px 5px 7px;
+  border: 0;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+}
+.ph-back .icon {
+  transition: translate 0.3s var(--ease);
+}
+.ph-back:hover {
+  background: transparent;
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+.ph-back:hover .icon {
+  translate: -3px 0;
 }
 .ph-title {
   font: 800 clamp(30px, 3.4vw, 52px)/0.95 var(--font-sans);
@@ -46,7 +57,7 @@
 }
 
 /* ===========================================================================
-   01 Overview
+   Overview
    =========================================================================== */
 .page-overview .page-inner {
   padding: 0;
@@ -64,10 +75,13 @@
      and 1.18 radii right. Update them if you move or resize it there. */
   --ribbon-left: calc(62vw - 1.25 * min(23.5vw, 43vh));
   --ribbon-right: calc(62vw + 1.18 * min(23.5vw, 43vh));
-  /* The moisture card sits just clear of the infinity, but never over the text column. On narrower
-     screens there's no room, so it overlaps the infinity's left loop a little. */
+  /* The two windows sit just clear of the infinity, but never over the text column. On narrower
+     screens there's no room, so they overlap the infinity's left loop. */
   --hero-w: clamp(300px, 24vw, 390px);
   --hero-x: max(var(--column-end) + 24px, min(22.5vw, var(--ribbon-left) - var(--hero-w) - 16px));
+  /* Where the brand block ends (30px down, then its lines; see .brand below). The windows are
+     centred between it and the bottom row of callouts at 81vh. */
+  --brand-bottom: calc(71px + 1.95 * clamp(30px, 3.3vw, 54px) + 1.26 * clamp(11px, 1.05vw, 16px));
 }
 .ov-brand {
   position: absolute;
@@ -149,12 +163,64 @@
   background: color-mix(in srgb, var(--ink) 55%, transparent);
 }
 
-/* The black moisture card, just left of the infinity */
-.hero {
+/* The two black windows (soil moisture, AI check-up), stacked just left of the infinity. Each one is
+   a link to its page. Sizes shrink a little on short screens so both fit between the brand and the
+   faults callout. */
+.ov-windows {
   position: absolute;
-  top: 35vh;
+  z-index: 2; /* in front of the leader lines, which pass behind them */
+  top: calc((var(--brand-bottom) + 81vh) / 2);
   left: var(--hero-x);
   width: var(--hero-w);
+  display: grid;
+  gap: clamp(12px, 2.4vh, 30px);
+  transform: translateY(-50%);
+}
+.win {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.win:focus-visible {
+  outline: none; /* the card shows the focus ring instead */
+}
+/* "Trends ->" / "Analysis ->": where the window leads, next to its status dot */
+.win-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  transition: color 0.25s;
+}
+.win-go .icon {
+  transition: translate 0.35s var(--ease);
+}
+.hero-top .win-go {
+  color: rgba(244, 244, 242, 0.5);
+}
+.win:hover .win-go,
+.win:focus-visible .win-go {
+  color: #f4f4f2;
+}
+.win:hover .win-go .icon,
+.win:focus-visible .win-go .icon {
+  translate: 4px 0;
+}
+.win .hero-card {
+  transition: transform 0.35s var(--ease), box-shadow 0.35s var(--ease);
+}
+.win:hover .hero-card,
+.win:focus-visible .hero-card {
+  transform: translateY(-3px);
+  box-shadow: 0 42px 80px -38px rgba(0, 0, 0, 0.72);
+}
+.win:focus-visible .hero-card {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.win:active .hero-card {
+  transform: translateY(-1px);
 }
 .hero-tab {
   display: inline-block;
@@ -169,7 +235,7 @@
 }
 .hero-card {
   position: relative;
-  padding: 18px 22px 18px;
+  padding: clamp(10px, 1.7vh, 18px) 22px;
   background:
     radial-gradient(ellipse 90% 70% at 20% 0%, rgba(255, 255, 255, 0.09), transparent 70%),
     #0c0d10;
@@ -178,8 +244,8 @@
 }
 .hero-top {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 14px;
 }
 .hero-top .micro {
   color: rgba(244, 244, 242, 0.55);
@@ -191,9 +257,12 @@
   background: var(--status, #6b6b6b);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--status, #6b6b6b) 22%, transparent);
 }
+.hero-dot.is-pulsing {
+  animation: pulse 2s ease-out infinite;
+}
 .hero-value {
   margin-top: 6px;
-  font: 800 clamp(66px, 6.4vw, 104px)/0.92 var(--font-sans);
+  font: 800 clamp(48px, min(6.4vw, 8vh), 104px)/0.92 var(--font-sans);
   letter-spacing: -0.025em;
 }
 .hero-unit {
@@ -210,7 +279,7 @@
   text-transform: uppercase;
 }
 .meter {
-  margin-top: 18px;
+  margin-top: clamp(10px, 1.9vh, 18px);
 }
 .meter-track {
   position: relative;
@@ -238,8 +307,8 @@
   grid-template-columns: repeat(3, auto);
   justify-content: space-between;
   gap: 12px;
-  margin-top: 18px;
-  padding-top: 13px;
+  margin-top: clamp(10px, 1.9vh, 18px);
+  padding-top: clamp(9px, 1.4vh, 13px);
   border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 .hero-meta dt {
@@ -252,6 +321,56 @@
   margin-top: 5px;
   font: 600 12px/1 var(--font-mono);
   font-variant-numeric: tabular-nums;
+}
+
+/* The AI check-up window: the latest verdict and its headline */
+.ai-win-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: clamp(8px, 1.4vh, 12px);
+  font: 800 clamp(19px, min(1.75vw, 3vh), 26px)/1.1 var(--font-sans);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.ai-win-title .icon {
+  flex: none;
+  color: var(--status);
+}
+.ai-win-title .spinner {
+  flex: none;
+  color: rgba(244, 244, 242, 0.7);
+}
+.ai-win-text {
+  display: -webkit-box;
+  min-height: 3em; /* two lines, so the window keeps its height whatever it says */
+  margin-top: 8px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  font: 500 12.5px/1.5 var(--font-sans);
+  color: rgba(244, 244, 242, 0.72);
+}
+
+/* Short screens: trim the windows so both fit between the brand and the bottom row of callouts */
+@media (max-height: 820px) and (min-width: 900px) and (min-aspect-ratio: 1/1) {
+  .ov .meter-scale {
+    display: none;
+  }
+  .ov .hero-tab {
+    padding: 6px 14px 5px;
+  }
+  .ai-win-text {
+    min-height: 1.5em;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+}
+@media (max-height: 760px) and (min-width: 900px) and (min-aspect-ratio: 1/1) {
+  .ov .hero-meta {
+    display: none;
+  }
 }
 
 /* Callouts around the infinity (desktop); each has a pin where its leader line starts */
@@ -311,6 +430,7 @@
 
 .leaders {
   position: absolute;
+  z-index: 1;
   inset: 0;
   width: 100%;
   height: 100%;
@@ -331,7 +451,7 @@
 }
 
 /* ===========================================================================
-   02 Trends
+   Trends
    =========================================================================== */
 .page-trends .page-inner {
   display: flex;
@@ -469,7 +589,7 @@
 }
 
 /* ===========================================================================
-   03 Analysis
+   Analysis
    =========================================================================== */
 .an-grid {
   display: grid;
@@ -690,7 +810,7 @@
 }
 
 /* ===========================================================================
-   04 Log
+   Log
    =========================================================================== */
 .lg {
   display: grid;
@@ -837,7 +957,7 @@
   .ov-brand,
   .ov-dossier,
   .ov-feed,
-  .hero,
+  .ov-windows,
   .ov-callouts,
   .callout {
     position: static;
@@ -849,7 +969,7 @@
     height: 34vh;
   }
   .ov-brand { order: 0; }
-  .hero { order: 2; max-width: 460px; }
+  .ov-windows { order: 2; max-width: 460px; transform: none; }
   .ov-callouts { order: 3; display: grid; grid-template-columns: 1fr 1fr; gap: 20px 14px; pointer-events: auto; }
   .ov-dossier { order: 4; }
   .ov-feed { order: 5; }
@@ -893,9 +1013,6 @@
     max-height: none;
     overflow: visible;
     padding: 20px;
-  }
-  .ph-num {
-    font-size: 58px;
   }
   .ph-ruler {
     display: none;

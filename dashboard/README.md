@@ -102,16 +102,19 @@ already allows cross-origin requests.
 
 ## The frontend
 
-Four full-screen pages: **Overview** (live readings around a 3D infinity sign whose colour shows the soil moisture),
-**Trends** (charts), **Analysis** (AI check-up) and **Log** (states over time, recent readings). Scrolling first makes the
-page creep and resist; past a threshold it jumps to the next page, and the background and the colours move with it. Arrow keys, Page Up/Down, Space, Home/End and the number keys 1–4 also work, as do swipes on a phone.
+Four full-screen pages, all in the same paper-and-ink colours. **Overview** shows the live readings around a 3D
+infinity sign whose colour shows the soil moisture, plus two black windows: the soil moisture window opens **Trends**
+(charts) and the AI check-up window opens **Analysis**. Scrolling only moves between the overview and **Log** (states
+over time, recent readings): the page first creeps and resists, and past a threshold it jumps. Every move plays the same
+glitch transition. On Trends and Analysis, Esc, the "Overview" button or scrolling up goes back. Arrow keys, Page Up/Down,
+Space and Home/End also work, as do swipes on a phone.
 
 | Library | Used for |
 |---|---|
 | [React](https://react.dev) 19 | components and state |
 | [TypeScript](https://www.typescriptlang.org) | types for the data and props |
 | [Vite](https://vite.dev) | dev server and production build |
-| [Motion](https://motion.dev) | the scroll position as an animated value, and the page transitions |
+| [Motion](https://motion.dev) | the view position as an animated value, and the page transitions |
 | [three.js](https://threejs.org) + [React Three Fiber](https://r3f.docs.pmnd.rs) | the 3D ribbon (WebGL) |
 | [d3-scale / d3-shape](https://d3js.org) | chart maths; the charts themselves are plain SVG |
 | [Fontsource](https://fontsource.org) | Montserrat and JetBrains Mono, served with the app |
@@ -122,16 +125,16 @@ Where to start reading:
 src/
   main.tsx              entry point: loads fonts and styles, renders <App/>
   App.tsx               wires everything: filters, data hooks, the pager, the four pages
-  config.ts             settings: calibration (SOIL_DRY_RAW / SOIL_WET_RAW), poll rate, pages
+  config.ts             settings: calibration (SOIL_DRY_RAW / SOIL_WET_RAW), poll rate, pages (and which open from where)
   hooks/
     useTelemetry.ts     loads readings, then polls /api/latest and fetches only new rows
     useAiCheckup.ts     the AI check-up request and its idle/running/done/error states
-    usePager.ts         wheel/touch/keyboard -> the "resist, then jump" page navigation
+    usePager.ts         wheel/touch/keyboard/clicks -> the "resist, then jump" page navigation
   pages/                Overview, Trends, Analysis, Log
   charts/               LineChart (SVG + d3), StatesTimeline, ReadingsTable
   components/           Chrome (top bar, rail, bottom bar), Backdrop, GlitchBurst, PageFrame, ...
   scene/                the 3D ribbon on the overview: poses.ts (where it sits), Ribbon.tsx, ribbonShader.ts
-  lib/                  API client and types, formatting, moisture maths, colours per page
+  lib/                  API client and types, formatting, moisture maths, status labels
   styles/               base.css (tokens, layers), chrome.css, pages.css
 ```
 
@@ -141,5 +144,5 @@ Each slat works out its own place on the curve, so the band can breathe and twis
 (dry) to deep ultramarine (wet).
 
 While `npm run dev` is running, a few URL parameters help with design work (they don't exist in the production build):
-`?m=0.2` pretends the soil moisture is 20 %, `?p=1.5` freezes the view halfway between pages 2 and 3, and `?still`
-skips fade-ins.
+`?m=0.2` pretends the soil moisture is 20 %, `?p=0.5#trends` freezes the view halfway from the overview to the page in
+the hash, and `?still` skips fade-ins.
