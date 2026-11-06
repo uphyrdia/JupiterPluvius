@@ -373,6 +373,8 @@ export class Stage {
       this.raf = requestAnimationFrame(this.loop);
     } else {
       cancelAnimationFrame(this.raf);
+      // the clock stops too: a pulse still under way would carry on when the overview comes back
+      this.pulseT.fill(-99);
     }
   }
 

@@ -10,13 +10,26 @@ Browser <--polls every 5 s-- FastAPI backend --+
                                   +-- "Run analysis" button --> DeepSeek API
 ```
 
-- `backend/main.py`: FastAPI. Signs in to Supabase as the read-only backend user, caches the token, and exposes:
+- `backend/`: FastAPI backend. Signs in to Supabase as the read-only backend user, caches the token, and exposes:
   - `GET /api/latest`: newest reading (or `null`)
   - `GET /api/readings?hours=1&after_id=123&include_test=true`: readings in the window (at most 24 h), oldest first. If the window holds more than 1000 readings, they are evenly thinned to 1000. As a safeguard it reads at most the newest 20,000 rows, so if the ESP32 uploads far too often, the oldest part of the window is left out.
   - `POST /api/insights?hours=24&tz_offset_min=480`: the "AI check-up". It sends the same (up to 1000) readings as CSV, plus a description of the device and some precomputed statistics, to DeepSeek (`deepseek-flash`, low reasoning effort). It returns JSON: `status` (good / attention / urgent), `headline`, `summary` points and `advice` items. It allows at most one call per 15 s, so repeated clicks can't drain the API balance. A 24 h analysis takes about 10–15 s and about 30k tokens.
   - `GET /api/health`
   - `/`: serves the built frontend (`frontend/dist`). Files under `/assets/` have a content hash in their name and are cached for a year; `index.html` is re-checked on every load, so a redeploy shows up right away. Responses are gzip-compressed.
 - `frontend/`: a React + TypeScript app built with Vite (see [The frontend](#the-frontend) below).
+
+The backend is split into four modules:
+
+| File | Responsibility |
+|---|---|
+| `backend/main.py` | HTTP routes and validation, middleware, frontend serving, and HTTP client cleanup |
+| `backend/config.py` | Environment variables and shared constants |
+| `backend/readings.py` | Supabase client, token cache, filtering, and paginated reading retrieval |
+| `backend/insights.py` | AI prompts, cooldown, and DeepSeek requests |
+
+`main.py` calls the reading and insight functions; `insights.py` also calls
+`fetch_readings()` directly. The modules use sibling imports to keep the existing
+`uvicorn main:app` startup commands below working.
 
 ## Supabase prerequisites
 
@@ -167,6 +180,13 @@ callouts never do: the callouts below it sit by the sculpture itself, and on scr
 rule for the layout around it. It draws itself in on the first visit, slides and fades with the overview when you
 scroll to the log, and stops rendering while the overview is away. It needs WebGL 2; without it the dashboard works
 the same, minus the infinity.
+
+Every click or tap sends a pulse along the band, as every key typed into rhine-lock's password field does: a swell
+runs out from the crossing and around the larger loop, the slats turning, growing and glowing lime as it passes, and
+it fades within about two seconds. Pressing a window sends one as its page starts to open (the press comes just
+before the click, so the pulse leads the zoom), and so does Enter on a focused window. There's no pulse on the other
+pages, where the infinity isn't drawn, or with reduced motion. `scene/Scene.tsx` sends them; the pulse itself is
+rhine-lock's, unchanged.
 
 **Licence:** rhine-lock is GNU AGPL-3.0-or-later, so these ported files are too, and so is anything that includes them.
 In particular, because the dashboard is served to other people over a network (Render), the AGPL asks that its complete

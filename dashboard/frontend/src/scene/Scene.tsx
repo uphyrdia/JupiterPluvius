@@ -34,6 +34,12 @@ function qualityFor(compact: boolean): Quality {
  * itself in. While pages slide (overview ⇄ log) it moves and fades with the overview. When a window
  * opens its page, the ∞ "unlocks": its fins peel off and fly apart; coming back, it draws itself again.
  * The canvas stops rendering while the overview is away.
+ *
+ * Every click or tap sends a pulse along the band, as every key typed into rhine-lock's password field
+ * does (Stage.pulse, with rhine-lock's origin): a swell runs out from the crossing, the fins turning,
+ * growing and glowing lime as it passes. Pressing a window sends one as it starts to open its page;
+ * the press comes before the click, so the pulse leads the zoom. Only while the overview is on screen,
+ * and not with reduced motion.
  */
 export default function Scene(props: SceneProps) {
   const { offset, zoom } = props;
@@ -165,10 +171,28 @@ export default function Scene(props: SceneProps) {
       S.pointer.x = e.clientX / window.innerWidth;
       S.pointer.y = e.clientY / window.innerHeight;
     };
+    // rhine-lock's keystroke pulse, on every click or tap (see the comment above Scene)
+    const pulse = () => {
+      if (awakeRef.current && !live.current.reduceMotion) stage.pulse(0.25 + Math.random() * 0.1);
+    };
+    const onPress = (e: PointerEvent) => {
+      if (e.isPrimary && e.button === 0) pulse(); // not a second finger, a right or a middle click
+    };
+    // Enter or Space on a focused window or button clicks it without a press (detail 0). So does a label
+    // passing a click on to its checkbox, straight after its own click: that one is skipped.
+    let clickedAt = -1e9;
+    const onClick = (e: MouseEvent) => {
+      if (e.detail > 0) clickedAt = e.timeStamp;
+      else if (e.timeStamp - clickedAt > 100) pulse();
+    };
     window.addEventListener("pointermove", onPointer);
+    window.addEventListener("pointerdown", onPress, { capture: true, passive: true });
+    window.addEventListener("click", onClick, { capture: true, passive: true });
     stage.setRunning(awakeNow());
     return () => {
       window.removeEventListener("pointermove", onPointer);
+      window.removeEventListener("pointerdown", onPress, { capture: true });
+      window.removeEventListener("click", onClick, { capture: true });
       stage.dispose();
       canvas.remove();
       stageRef.current = null;
