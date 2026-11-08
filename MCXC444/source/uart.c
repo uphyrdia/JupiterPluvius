@@ -56,8 +56,8 @@ void initUART2(void)
 	NVIC_EnableIRQ(UART2_FLEXIO_IRQn);
 }
 
+// No need to be volatile by design
 static char send_buffer[MAX_MSG_LEN];
-static volatile int send_ptr = 0;
 
 /* CRC-16/CCITT-FALSE: polynomial 0x1021, initial value 0xFFFF,
  * no reflection, no final XOR. Covers DATA|payload only.
@@ -128,7 +128,8 @@ bool UART2_Decode(TMessage *msg)
 
 void UART2_FLEXIO_IRQHandler(void)
 {
-    // Transmitting data
+	// Transmitting data
+	static int send_ptr = 0;
 	if ((UART2->C2 & UART_C2_TIE_MASK) && (UART2->S1 & UART_S1_TDRE_MASK))
 	{
 		if (send_buffer[send_ptr] == '\0')
@@ -147,15 +148,15 @@ void UART2_FLEXIO_IRQHandler(void)
 
 	// Collect @...\n frames; a new @ restarts an incomplete frame.
 	static int recv_ptr = 0;
-    static TMessage msg;
+	static TMessage msg;
 	uint8_t status = UART2->S1;
 
-    if (status & UART_S1_OR_MASK) {
-        (void)UART2->D; // Read and discard the byte
-        recv_ptr = 0;  // Discard the incomplete message
-    }
-    else if (status & UART_S1_RDRF_MASK)
-    {
+	if (status & UART_S1_OR_MASK) {
+		(void)UART2->D; // Read and discard the byte
+		recv_ptr = 0;  // Discard the incomplete message
+	}
+	else if (status & UART_S1_RDRF_MASK)
+	{
 		char rx_data = UART2->D;
 
 		if (rx_data == '@') recv_ptr = 0;
