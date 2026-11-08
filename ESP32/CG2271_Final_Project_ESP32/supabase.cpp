@@ -122,7 +122,7 @@ static String buildReadingJSON(const SupabaseConfig& config, const MCXStatus& mc
   if (haveMCX && mcx.alarm) faults[count++] = "MCXC444_ALARM";
   reading["faults"] = faults;
   reading["test_data"] = false;
-  // PostgreSQL supplies id and created_at. Pump state has no column here.
+  // PostgreSQL supplies id and created_at.
   return JSON.stringify(reading);
 }
 

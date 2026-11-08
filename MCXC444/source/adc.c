@@ -56,7 +56,7 @@ void initADC0(void)
 	/* ADCH = 31 leaves the ADC disabled until startADC() selects a channel. */
 	ADC0->SC1[0] = ADC_SC1_ADCH(31);
 
-	NVIC_SetPriority(ADC0_IRQn, 3); // Lowest priority on Cortex-M0+
+	NVIC_SetPriority(ADC0_IRQn, ADC0_INT_PRIO); // Lowest priority on Cortex-M0+
 	NVIC_ClearPendingIRQ(ADC0_IRQn);
 	NVIC_EnableIRQ(ADC0_IRQn);
 }

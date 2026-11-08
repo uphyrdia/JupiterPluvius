@@ -40,7 +40,7 @@
 
 #define SOIL_MOISTURE_SAMPLING_PERIOD	 500U
 #define SEND_INTERVAL_MS				1000U
-#define PUMP_COOLDOWN_MS               60000U
+#define PUMP_COOLDOWN_MS               30000U
 
 QueueHandle_t queue;
 SemaphoreHandle_t led_sema;
@@ -52,7 +52,6 @@ SemaphoreHandle_t uart_sema;
 static unsigned int moisture = 1000;
 volatile bool reservoir_level_ok; // initialized in initCMP0()
 
-static bool pumping = false;
 static bool alarming = false;
 static bool lighting = false;
 
@@ -108,8 +107,8 @@ static void sendTask(void *p)
 	for (;;) {
 		static TMessage msg;
 		snprintf(msg.message, MAX_MSG_LEN,
-				"SOIL:%u,WATER:%d,PUMP:%d,ALARM:%d,LED:%d",
-				moisture, reservoir_level_ok, pumping, alarming, lighting);
+				"SOIL:%u,WATER:%d,ALARM:%d,LED:%d",
+				moisture, reservoir_level_ok, alarming, lighting);
 		UART2_Send(&msg);
 		vTaskDelay(pdMS_TO_TICKS(SEND_INTERVAL_MS));
 	}
@@ -125,10 +124,8 @@ static void pumpTask(void *p)
 			duration_ms += 1000U;
 
 		onPump();
-		pumping = true;
 		vTaskDelay(pdMS_TO_TICKS(duration_ms));
 		offPump();
-		pumping = false;
 
 		vTaskDelay(pdMS_TO_TICKS(PUMP_COOLDOWN_MS));
 	}
@@ -153,16 +150,14 @@ static void soil_moisture_sensor_task(void *p)
 
 static void water_level_sensor_task(void *p)
 {
-    if (reservoir_level_ok)
-        offBuzzer();
-    else
-        onBuzzer();
+    if (reservoir_level_ok) offBuzzer();
+    else onBuzzer();
+
 	for (;;) {
 		while (xSemaphoreTake(reservoir_level_sema, portMAX_DELAY) != pdTRUE) {}
-		if (reservoir_level_ok)
-			offBuzzer();
-		else
-			onBuzzer();
+
+		if (reservoir_level_ok) offBuzzer();
+		else onBuzzer();
 
 		if (xSemaphoreTake(print_mutex, portMAX_DELAY) == pdTRUE)
 		{

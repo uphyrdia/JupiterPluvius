@@ -31,11 +31,9 @@ The backend is split into four modules:
 `fetch_readings()` directly. The modules use sibling imports to keep the existing
 `uvicorn main:app` startup commands below working.
 
-## Supabase prerequisites
+## Supabase configuration
 
-1. Run `sql_1.txt`, `sql_2.txt` and **`sql_3.txt`** in the Supabase SQL editor. Without `sql_3.txt`, the backend
-   gets `permission denied for table readings`.
-2. Check that the UUID in `sql_3.txt` is the UUID of the backend user (`Authentication → Users`).
+See `sql_1.txt`, `sql_2.txt` and `sql_3.txt`.
 
 ## Run locally
 

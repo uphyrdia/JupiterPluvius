@@ -1,3 +1,8 @@
+/*
+ * Since a water pump is used instead of a servo,
+ * the pwm component is no longer used.
+ */
+
 #include <stdint.h>
 
 #include "fsl_common.h"

@@ -97,19 +97,18 @@ static void processMCXPacket(char* line, MCXStatus& mcx) {
     return;
   }
 
-  int soil, water, pump, alarm, led;
+  int soil, water, alarm, led;
   int consumed = 0;
 
   // Spaces in sscanf format permit either ",LED:" or ", LED:".
   // %n checks that the complete packet matches the expected format.
   int matched = sscanf(line,
-      "SOIL:%d,WATER:%d,PUMP:%d,ALARM:%d, LED:%d %n",
-      &soil, &water, &pump, &alarm, &led, &consumed);
+      "SOIL:%d,WATER:%d,ALARM:%d, LED:%d %n",
+      &soil, &water, &alarm, &led, &consumed);
 
-  if (matched != 5 || consumed == 0 || line[consumed] != '\0' ||
+  if (matched != 4 || consumed == 0 || line[consumed] != '\0' ||
       soil < 0 || soil > 4095 ||
       (water != 0 && water != 1) ||
-      (pump  != 0 && pump  != 1) ||
       (alarm != 0 && alarm != 1) ||
       (led   != 0 && led   != 1)) {
     Serial.println("[MCX] Invalid/unsupported status packet");
@@ -118,16 +117,15 @@ static void processMCXPacket(char* line, MCXStatus& mcx) {
 
   mcx.soilADC = soil;
   mcx.waterFlag = water;
-  mcx.pumpOn = (pump == 1);
   mcx.alarm = (alarm == 1);
   mcx.ledOn = (led == 1);
   mcx.valid = true;
   mcx.receivedMs = millis();
 
-  Serial.printf("[MCX] Soil ADC=%d | WaterFlag=%d | Pump=%d | "
+  Serial.printf("[MCX] Soil ADC=%d | WaterFlag=%d | "
                 "Alarm=%d | LED=%d\n",
                 mcx.soilADC, mcx.waterFlag,
-                mcx.pumpOn, mcx.alarm, mcx.ledOn);
+                mcx.alarm, mcx.ledOn);
 }
 
 // Collect @...\n frames. A new @ restarts an incomplete frame.

@@ -10,7 +10,7 @@
 
   UART: 9600 baud, 8N1, @DATA|payload*HHHH\n frames (CRC-16/CCITT-FALSE)
     ESP32 -> MCU: TEMP:22.5,HUM:53.1,LIGHT_ADC:500
-    MCU -> ESP32: SOIL:2048,WATER:1,PUMP:0,ALARM:0,LED:1
+    MCU -> ESP32: SOIL:2048,WATER:1,ALARM:0,LED:1
 
   Network:
     HTTPS sign-in with the Supabase device account from dashboard/as4/as4.ino.
