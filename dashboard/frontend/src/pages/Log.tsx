@@ -16,13 +16,15 @@ interface Props {
 }
 
 const INDEX = PAGE_IDS.indexOf("log");
-const RECENT = 20;
 const d = (delay: number) => ({ "--d": delay }) as CSSProperties;
 
-/** The page below the overview: on/off states over time, and the latest readings as a table. */
+/**
+ * The page below the overview: on/off states over time (from the possibly thinned window), and the
+ * latest readings as a table (every reading, never thinned).
+ */
 export function Log({ telemetry, hours, pager, active }: Props) {
   const { rows, updatedAt } = telemetry;
-  const recent = useMemo(() => rows.slice(-RECENT).reverse(), [rows]);
+  const recent = useMemo(() => telemetry.recent.slice().reverse(), [telemetry.recent]);
   const gap = useMemo(() => gapMs(rows), [rows]);
 
   return (
@@ -44,7 +46,7 @@ export function Log({ telemetry, hours, pager, active }: Props) {
             <span className="tag">TB·01</span>
             <h3 id="table-title">Recent readings</h3>
             <span className="micro">
-              Newest first · {recent.length} of {rows.length}
+              Newest first · latest {recent.length} in {hours} h
             </span>
           </header>
           <ReadingsTable rows={recent} />

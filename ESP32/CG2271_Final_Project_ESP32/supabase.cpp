@@ -82,7 +82,7 @@ static bool ensureSignedIn(const SupabaseConfig& config) {
 }
 
 // ==========================================================
-// 8. SUPABASE READINGS (dashboard/sql_1.txt)
+// SUPABASE READINGS (dashboard/sql_1.txt)
 // ==========================================================
 static String buildReadingJSON(const SupabaseConfig& config, const MCXStatus& mcx) {
   unsigned long now = millis();
@@ -119,7 +119,6 @@ static String buildReadingJSON(const SupabaseConfig& config, const MCXStatus& mc
   if (!haveDHT) faults[count++] = "DHT11_UNAVAILABLE";
   if (!haveLight) faults[count++] = "LIGHT_SENSOR_UNAVAILABLE";
   if (!haveMCX) faults[count++] = "MCXC444_UNAVAILABLE";
-  if (haveMCX && mcx.alarm) faults[count++] = "MCXC444_ALARM";
   reading["faults"] = faults;
   reading["test_data"] = false;
   // PostgreSQL supplies id and created_at.

@@ -1,6 +1,6 @@
 #ifndef CG2271_ROOT_CA_CERTS_H
 #define CG2271_ROOT_CA_CERTS_H
 
-extern const char CG2271_ROOT_CA_CERTIFICATES[];
+extern const char ROOT_CA_CERTIFICATES[];
 
-#endif // ROOT_CA_CERTS_H
+#endif // CG2271_ROOT_CA_CERTS_H

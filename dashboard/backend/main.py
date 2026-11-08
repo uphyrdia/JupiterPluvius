@@ -9,16 +9,27 @@ A thin read-only layer between the dashboard and Supabase:
 The ESP32 writes to Supabase directly; this server never writes anything.
 """
 
-from fastapi import FastAPI, Query
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from config import FRONTEND_DIR
 from insights import deepseek, generate_insights
-from readings import fetch_latest, fetch_readings, supabase
+from readings import fetch_latest, fetch_readings, fetch_recent, supabase
 
-app = FastAPI(title="JupiterPluvius API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    # On shutdown: close the HTTP clients.
+    await supabase.aclose()
+    await deepseek.aclose()
+
+
+app = FastAPI(title="JupiterPluvius API", lifespan=lifespan)
 # Allows the frontend to be hosted elsewhere (e.g. a Render Static Site) too.
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"], allow_headers=["*"])
 # Compress responses: the 3D chunk shrinks from ~790 kB to ~240 kB, 1000 readings to ~30 kB.
@@ -73,15 +84,29 @@ async def readings(
     )
 
 
+@app.get("/api/recent")
+async def recent(
+    hours: float = Query(1, gt=0, le=24),
+    limit: int = Query(20, ge=1, le=100),
+    device_id: str | None = None,
+    include_test: bool = True,
+):
+    """The newest `limit` readings from the last `hours`, oldest first and never thinned."""
+    return await fetch_recent(hours=hours, limit=limit, device_id=device_id, include_test=include_test)
+
+
 @app.post("/api/insights")
 async def insights(
     hours: float = Query(1, gt=0, le=24),
     include_test: bool = True,
     tz_offset_min: int = Query(0, ge=-720, le=840),  # the browser's offset from UTC, e.g. 480 for UTC+8
-    soil_dry_raw: int = 1900,
-    soil_wet_raw: int = 500,
+    soil_dry_raw: int = Query(1900, ge=0, le=4095),
+    soil_wet_raw: int = Query(500, ge=0, le=4095),
 ):
     """Ask DeepSeek for a short summary of, and advice on, the readings from the last `hours`."""
+    if soil_dry_raw == soil_wet_raw:
+        # moisture_pct divides by (dry - wet)
+        raise HTTPException(422, "soil_dry_raw and soil_wet_raw must differ")
     return await generate_insights(
         hours=hours,
         include_test=include_test,
@@ -89,12 +114,6 @@ async def insights(
         soil_dry_raw=soil_dry_raw,
         soil_wet_raw=soil_wet_raw,
     )
-
-
-@app.on_event("shutdown")
-async def close_client():
-    await supabase.aclose()
-    await deepseek.aclose()
 
 
 # Mounted last so /api/* routes take priority. html=True serves index.html at "/".

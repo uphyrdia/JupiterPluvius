@@ -7,7 +7,6 @@ struct MCXStatus {
   bool valid = false;
   int soilADC = 0;         // Raw 12-bit soil reading (0..4095)
   int waterFlag = 0;       // Binary threshold status (0 or 1)
-  bool alarm = false;      // 1 = buzzer on
   bool ledOn = false;      // 1 = external LED on
   unsigned long receivedMs = 0;
 };

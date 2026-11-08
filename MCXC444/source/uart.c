@@ -60,7 +60,8 @@ static char send_buffer[MAX_MSG_LEN];
 static volatile int send_ptr = 0;
 
 /* CRC-16/CCITT-FALSE: polynomial 0x1021, initial value 0xFFFF,
- * no reflection, no final XOR. Covers DATA|payload only. */
+ * no reflection, no final XOR. Covers DATA|payload only.
+ * M_{n+1} x^16 = (M_{n} x^8 + B_{n+1}) x^16 = (M_{n} x^16 + B_{n+1} x^8) x^8 */
 static uint16_t packetCRC(const char *data, size_t length)
 {
 	uint16_t crc = 0xFFFFU;

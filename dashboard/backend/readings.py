@@ -61,6 +61,24 @@ async def fetch_latest(device_id: str | None = None, include_test: bool = True):
     return rows[0] if rows else None
 
 
+async def fetch_recent(
+    hours: float = 1,
+    limit: int = 20,
+    device_id: str | None = None,
+    include_test: bool = True,
+):
+    """The newest `limit` readings from the last `hours`, oldest first (one request, never thinned)."""
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    params = base_filters(device_id, include_test) | {
+        "created_at": f"gte.{since.isoformat()}",
+        "order": "id.desc",
+        "limit": str(limit),
+    }
+    rows = await select_readings(params)
+    rows.reverse()
+    return rows
+
+
 async def fetch_readings(
     hours: float = 1,
     after_id: int | None = None,

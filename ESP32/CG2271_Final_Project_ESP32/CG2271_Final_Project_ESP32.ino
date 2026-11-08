@@ -10,10 +10,11 @@
 
   UART: 9600 baud, 8N1, @DATA|payload*HHHH\n frames (CRC-16/CCITT-FALSE)
     ESP32 -> MCU: TEMP:22.5,HUM:53.1,LIGHT_ADC:500
-    MCU -> ESP32: SOIL:2048,WATER:1,ALARM:0,LED:1
+    MCU -> ESP32: SOIL:2048,WATER:1,LED:1
 
   Network:
-    HTTPS sign-in with the Supabase device account from dashboard/as4/as4.ino.
+    HTTPS sign-in with the Supabase device account (DEVICE_EMAIL below),
+    allowed to insert by the esp32_insert policy in dashboard/sql_2.txt.
     POST /rest/v1/readings  - real readings matching dashboard/sql_1.txt
 
 */
@@ -34,7 +35,7 @@ constexpr char DEVICE_PASSWORD[] = "uphyrdia";
 constexpr char DEVICE_ID[] = "esp32";
 
 // ==========================================================
-// 2. PIN AND TIMING SETTINGS
+// PIN AND TIMING SETTINGS
 // ==========================================================
 #define UART_RX_PIN 16
 #define UART_TX_PIN 17
@@ -49,14 +50,14 @@ constexpr unsigned long API_INTERVAL_MS   = 5000;
 // MCXC444 sends reservoir_level_ok: WATER:0 means LOW, WATER:1 means OK.
 const int WATER_LOW_CODE = 0;
 
-// Same bright/dark threshold as MCXC444/source/main.c; lower ADC is brighter.
+// Same bright/dark threshold as LIGHT_ADC_THRESHOLD in MCXC444/source/main.c;
+// lower ADC is brighter. Bright means below it; at or above it is dark.
+// Measured: torch ~100, room ~500, covered ~3000+.
 const int LIGHT_STATE_THRESHOLD = 1000;
 
-// Soil calibration is optional. Record ADC readings in fully DRY and
-// fully WET reference conditions, then enter both below (0..4095).
-// Until then, only soil_adc_raw is uploaded; soil_moisture_index = null.
-const int SOIL_ADC_DRY = -1;  // TODO: replace with measured dry ADC
-const int SOIL_ADC_WET = -1;  // TODO: replace with measured wet ADC
+// Soil moisture is uploaded as raw ADC only (soil_adc_raw). The dashboard
+// converts it to a percentage with SOIL_DRY_RAW / SOIL_WET_RAW in
+// dashboard/frontend/src/config.ts.
 
 const SupabaseConfig supabaseConfig = {
   SUPABASE_URL,
@@ -74,26 +75,6 @@ unsigned long lastDHTPoll = 0;
 unsigned long lastLightPoll = 0;
 unsigned long lastUARTSend = 0;
 unsigned long lastAPISend = 0;
-bool wifiWasConnected = false;
-
-void manageWiFi() {
-  if (WiFi.status() == WL_CONNECTED) {
-    if (!wifiWasConnected) {
-      wifiWasConnected = true;
-      Serial.print("[WiFi] Connected; ESP32 IP: ");
-      Serial.println(WiFi.localIP());
-      // NTP runs in the background; HTTPS waits for a valid clock below.
-      configTime(0, 0, "pool.ntp.org", "time.google.com");
-    }
-    return;
-  }
-
-  if (wifiWasConnected) {
-    wifiWasConnected = false;
-    Serial.println("[WiFi] Connection lost; automatic reconnection enabled");
-  }
-  // Let auto-reconnect finish its attempt; a manual reconnect can overlap it.
-}
 
 void setup() {
   Serial.begin(115200);
@@ -106,16 +87,21 @@ void setup() {
   Serial1.begin(UART_BAUD, SERIAL_8N1, UART_RX_PIN, UART_TX_PIN);
   Serial.println("[UART] Serial1 ready, 9600 8N1");
 
-  // Wi-Fi credentials and Supabase authentication follow dashboard/as4/as4.ino.
+  WiFi.onEvent([](WiFiEvent_t, WiFiEventInfo_t) {
+    Serial.print("[WiFi] Connected; ESP32 IP: ");
+    Serial.println(WiFi.localIP());
+  }, ARDUINO_EVENT_WIFI_STA_GOT_IP);
   WiFi.onEvent([](WiFiEvent_t, WiFiEventInfo_t info) {
     Serial.printf("[WiFi] Disconnected, reason: %u\n",
                   (unsigned int)info.wifi_sta_disconnected.reason);
   }, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
   WiFi.mode(WIFI_STA);
-  WiFi.setAutoReconnect(true);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);  // auto-reconnect is on by default
   Serial.print("[WiFi] Connecting to ");
   Serial.println(WIFI_SSID);
+  // NTP syncs in the background once the network is up (it must start after
+  // WiFi.mode()/begin()); HTTPS waits for a valid clock in supabase.cpp.
+  configTime(0, 0, "pool.ntp.org", "time.google.com");
 
   // Initial readings (DHT11 needs startup time).
   readLightSensor();
@@ -132,8 +118,7 @@ void setup() {
 void loop() {
   // Always service UART before potentially blocking network activity.
   receiveFromMCXC444(mcx);
-  manageWiFi();
-  
+
   unsigned long now = millis();
 
   if (now - lastLightPoll >= LIGHT_INTERVAL_MS) {

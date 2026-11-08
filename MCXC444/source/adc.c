@@ -8,8 +8,6 @@ void initADC0(void)
 	SIM->SCGC5 |= SIM_SCGC5_PORTB_MASK;
 	SIM->SCGC6 |= SIM_SCGC6_ADC0_MASK;
 
-	NVIC_DisableIRQ(ADC0_IRQn);
-
 	// MUX = 0 selects analog function
 	PORTB->PCR[SOIL_PIN] &= ~PORT_PCR_MUX_MASK;
 
@@ -29,7 +27,7 @@ void initADC0(void)
 
 	ADC0->SC1[0] = ADC_SC1_ADCH(31); // Disable conversions during setup
 
-	// Calibrate once before either task uses ADC0 (reference manual 23.5.6).
+	// Calibrate once before poll_soil_adc() first uses ADC0 (reference manual 23.5.6).
 	ADC0->SC3 = ADC_SC3_CALF_MASK | ADC_SC3_CAL_MASK |
 	            ADC_SC3_AVGE_MASK | ADC_SC3_AVGS(3);
 	// Busy-waits until calibration finishes
@@ -53,12 +51,9 @@ void initADC0(void)
 	 */
 	ADC0->SC3 = 0;
 
-	/* ADCH = 31 leaves the ADC disabled until startADC() selects a channel. */
+	/* ADCH = 31 leaves the ADC disabled until poll_soil_adc() selects a channel.
+	 * Conversions are polled (AIEN = 0), so the ADC0 interrupt stays disabled. */
 	ADC0->SC1[0] = ADC_SC1_ADCH(31);
-
-	NVIC_SetPriority(ADC0_IRQn, ADC0_INT_PRIO); // Lowest priority on Cortex-M0+
-	NVIC_ClearPendingIRQ(ADC0_IRQn);
-	NVIC_EnableIRQ(ADC0_IRQn);
 }
 
 unsigned int poll_soil_adc(void)

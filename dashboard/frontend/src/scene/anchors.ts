@@ -21,5 +21,3 @@ export const anchorBus = {
   drawn: new Float32Array(ANCHORS.length).fill(1), // 0..1: is the band there yet (it draws itself in)
   visible: false, // false once the overview has scrolled away (or before the scene has loaded)
 };
-
-export const anchorIndex = (id: AnchorId) => ANCHORS.findIndex((a) => a.id === id);

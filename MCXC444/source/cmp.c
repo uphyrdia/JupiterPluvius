@@ -63,7 +63,7 @@ void initCMP0(void)
 	scr |= (CMP_SCR_IER_MASK | CMP_SCR_IEF_MASK);
 	CMP0->SCR = scr;
 
-    NVIC_SetPriority(CMP0_IRQn, 2);
+    NVIC_SetPriority(CMP0_IRQn, CMP0_INT_PRIO);
     NVIC_ClearPendingIRQ(CMP0_IRQn);
     NVIC_EnableIRQ(CMP0_IRQn);
 }

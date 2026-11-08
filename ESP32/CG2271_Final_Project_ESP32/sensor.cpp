@@ -25,7 +25,7 @@ void initSensors() {
 }
 
 // ==========================================================
-// 4. SENSOR READINGS
+// SENSOR READINGS
 // ==========================================================
 void readDHT11() {
   TempAndHumidity data = dht.getTempAndHumidity();
@@ -74,14 +74,6 @@ void readLightSensor() {
   lightValid = true;
   lightSampleMs = millis();
   Serial.printf("[LIGHT] Raw ADC: %d\n", lightRaw);
-}
-
-// Relative index, not calibrated lux: 100 = bright, 0 = dark.
-float lightIndexFromRaw(int raw) {
-  float result = 100.0f *
-      (LIGHT_DARK_ADC - raw) /
-      (LIGHT_DARK_ADC - LIGHT_BRIGHT_ADC);
-  return constrain(result, 0.0f, 100.0f);
 }
 
 bool dhtIsFresh(unsigned long now) {

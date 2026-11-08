@@ -10,7 +10,7 @@ static char uartLine[RX_BUFFER_SIZE];
 static size_t uartLength = 0;
 
 // ==========================================================
-// 5. UART FRAMING AND TX: ESP32-S2 -> MCXC444
+// UART FRAMING AND TX: ESP32-S2 -> MCXC444
 // ==========================================================
 /* CRC-16/CCITT-FALSE: polynomial 0x1021, initial value 0xFFFF,
  * no reflection, no final XOR. Covers DATA|payload only. */
@@ -82,7 +82,7 @@ void sendToMCXC444(float temperatureC, float humidityPercent, int lightRaw,
 }
 
 // ==========================================================
-// 6. UART RX: MCXC444 -> ESP32-S2
+// UART RX: MCXC444 -> ESP32-S2
 // ==========================================================
 static void processMCXPacket(char* line, MCXStatus& mcx) {
   if (!decodePacket(line)) {
@@ -92,24 +92,18 @@ static void processMCXPacket(char* line, MCXStatus& mcx) {
   Serial.print("[UART RX <- MCXC444] ");
   Serial.println(line);
 
-  if (strcmp(line, "ACK") == 0) {
-    Serial.println("[MCX] ACK received");
-    return;
-  }
-
-  int soil, water, alarm, led;
+  int soil, water, led;
   int consumed = 0;
 
-  // Spaces in sscanf format permit either ",LED:" or ", LED:".
+  // The MCXC444 sends SOIL:%u,WATER:%d,LED:%d (sendTask in its main.c).
   // %n checks that the complete packet matches the expected format.
   int matched = sscanf(line,
-      "SOIL:%d,WATER:%d,ALARM:%d, LED:%d %n",
-      &soil, &water, &alarm, &led, &consumed);
+      "SOIL:%d,WATER:%d,LED:%d%n",
+      &soil, &water, &led, &consumed);
 
-  if (matched != 4 || consumed == 0 || line[consumed] != '\0' ||
+  if (matched != 3 || consumed == 0 || line[consumed] != '\0' ||
       soil < 0 || soil > 4095 ||
       (water != 0 && water != 1) ||
-      (alarm != 0 && alarm != 1) ||
       (led   != 0 && led   != 1)) {
     Serial.println("[MCX] Invalid/unsupported status packet");
     return;
@@ -117,15 +111,12 @@ static void processMCXPacket(char* line, MCXStatus& mcx) {
 
   mcx.soilADC = soil;
   mcx.waterFlag = water;
-  mcx.alarm = (alarm == 1);
   mcx.ledOn = (led == 1);
   mcx.valid = true;
   mcx.receivedMs = millis();
 
-  Serial.printf("[MCX] Soil ADC=%d | WaterFlag=%d | "
-                "Alarm=%d | LED=%d\n",
-                mcx.soilADC, mcx.waterFlag,
-                mcx.alarm, mcx.ledOn);
+  Serial.printf("[MCX] Soil ADC=%d | WaterFlag=%d | LED=%d\n",
+                mcx.soilADC, mcx.waterFlag, mcx.ledOn);
 }
 
 // Collect @...\n frames. A new @ restarts an incomplete frame.

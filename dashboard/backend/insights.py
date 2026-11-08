@@ -8,7 +8,10 @@ from datetime import datetime, timedelta, timezone
 import httpx
 from fastapi import HTTPException
 
-from config import AI_COOLDOWN_S, DEEPSEEK_KEY, DEEPSEEK_MODEL, PUMP_THRESHOLD_RAW
+from config import (
+    AI_COOLDOWN_S, DEEPSEEK_KEY, DEEPSEEK_MODEL, PUMP_COOLDOWN_S, PUMP_DRY_AIR_PCT, PUMP_EXTRA_S,
+    PUMP_HOT_C, PUMP_RUN_S, PUMP_THRESHOLD_RAW,
+)
 from readings import fetch_readings
 
 # an HTTP client for DeepSeek's OpenAI-style chat API; answers can take a while
@@ -49,15 +52,49 @@ How the device works:
   The reading is INVERSELY related to moisture: about {dry} in dry air, about {wet} when fully wet.
   moisture_pct = (soil_raw - {dry}) / ({wet} - {dry}) * 100, clamped to 0-100.
 - Whenever soil_raw is above {PUMP_THRESHOLD_RAW} (drier than that), the firmware runs the water pump
-  in short bursts (1 s if air humidity > 60 %, otherwise 2 s). Pump activity itself is not logged.
+  for {PUMP_RUN_S} s, or {PUMP_RUN_S + PUMP_EXTRA_S} s if the air temperature is {PUMP_HOT_C} °C or more or the
+  air humidity is {PUMP_DRY_AIR_PCT} % or less. After each watering it waits {PUMP_COOLDOWN_S} s, then waters
+  again if the soil is still that dry. Pump activity itself is not logged.
 - An ESP32 measures air temperature, air humidity and ambient light, and uploads all readings.
 - light_bright = 0 means it is dark; then the firmware switches on a grow LED (led_on = 1).
 - reservoir_ok = 0 means the water reservoir feeding the pump is low: the pump cannot water the
   plant until the owner refills it.
-- faults lists error codes reported by the device, if any.
+- faults lists error codes reported by the device, if any: DHT11_UNAVAILABLE (no temperature/humidity),
+  LIGHT_SENSOR_UNAVAILABLE, MCXC444_UNAVAILABLE (no recent soil/reservoir/LED status from the
+  microcontroller).
 - test_data = 1 marks a row inserted while testing the system (by hand or by the ESP32's demo
   mode): its values are made up, not measurements of the plant.
 {AI_RULES}"""
+
+
+AI_STATUSES = {"good", "attention", "urgent"}
+AI_PRIORITIES = {"info", "warning", "urgent"}
+
+
+def valid_report(result) -> dict | None:
+    """The model's report in exactly the shape AI_RULES asks for (extra keys dropped), or None."""
+    if not isinstance(result, dict):
+        return None
+    status, headline = result.get("status"), result.get("headline")
+    summary, advice = result.get("summary"), result.get("advice")
+    if (
+        status not in AI_STATUSES
+        or not isinstance(headline, str)
+        or not isinstance(summary, list)
+        or not all(isinstance(s, str) for s in summary)
+        or not isinstance(advice, list)
+        or not all(
+            isinstance(a, dict) and a.get("priority") in AI_PRIORITIES and isinstance(a.get("text"), str)
+            for a in advice
+        )
+    ):
+        return None
+    return {
+        "status": status,
+        "headline": headline,
+        "summary": summary,
+        "advice": [{"priority": a["priority"], "text": a["text"]} for a in advice],
+    }
 
 
 def parse_time(s: str) -> datetime:
@@ -148,11 +185,11 @@ async def generate_insights(
     data = r.json()
     content = data["choices"][0]["message"]["content"] or ""
     try:
-        result = json.loads(content)
+        result = valid_report(json.loads(content))
     except ValueError:
         result = None
-    if not isinstance(result, dict):
-        result = {"raw": content}  # the frontend shows it as plain text
+    if result is None:
+        result = {"raw": content}  # not the shape we asked for: the frontend shows it as plain text
     return result | {
         "model": data.get("model", DEEPSEEK_MODEL),
         "readings": len(rows),

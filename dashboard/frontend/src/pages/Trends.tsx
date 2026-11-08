@@ -28,7 +28,7 @@ const COLORS = { moist: "#2b47e6", temp: "#eb6834", hum: "#1baf7a" };
  * Opens from the overview's soil moisture window.
  */
 export function Trends({ telemetry, hours, includeTest, pager, active }: Props) {
-  const { rows, loading, updatedAt } = telemetry;
+  const { rows, thinned, loading, updatedAt } = telemetry;
   const [hoverT, setHoverT] = useState<number | null>(null);
 
   const gap = useMemo(() => gapMs(rows), [rows]);
@@ -45,7 +45,7 @@ export function Trends({ telemetry, hours, includeTest, pager, active }: Props) 
           onBack={() => pager.goTo(parentOf(INDEX))}
         >
           <p className="ph-meta micro">
-            {rows.length} readings{rows.length >= 1000 ? " (evenly thinned)" : ""} ·{" "}
+            {rows.length} readings{thinned ? " (evenly thinned)" : ""} ·{" "}
             {includeTest ? "test data included" : "real readings only"}
           </p>
         </PageHeader>

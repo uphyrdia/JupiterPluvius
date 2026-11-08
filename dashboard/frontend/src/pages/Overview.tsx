@@ -75,7 +75,7 @@ export function Overview({ telemetry, hours, ai, pager, active, compact }: Props
       value: reservoir == null ? "—" : reservoir ? "OK" : "Low",
       icon: reservoir == null ? undefined : reservoir ? "check" : "alert",
       tone: reservoir == null ? undefined : reservoir ? "good" : "critical",
-      sub: reservoir === false ? "Refill it: the pump has no water" : "The pump has water",
+      sub: reservoir == null ? "No reservoir reading" : reservoir ? "The pump has water" : "Refill it: the pump has no water",
     },
     {
       id: "faults", side: "bottom", tag: "Diagnostics", title: "Faults",

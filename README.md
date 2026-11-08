@@ -10,7 +10,7 @@ Supabase API key: sb\_publishable\_sJjt6SXXxUpcYvcTUe7UCA\_fNBiWSQ9
 
 
 
-ESP upload rate: every 30 seconds
+ESP upload rate: every 5 seconds
 
 
 
