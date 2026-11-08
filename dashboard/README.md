@@ -10,19 +10,31 @@ Browser <--polls every 5 s-- FastAPI backend --+
                                   +-- "Run analysis" button --> DeepSeek API
 ```
 
-- `backend/main.py`: FastAPI. Signs in to Supabase as the read-only backend user, caches the token, and exposes:
+- `backend/`: FastAPI backend. Signs in to Supabase as the read-only backend user, caches the token, and exposes:
   - `GET /api/latest`: newest reading (or `null`)
   - `GET /api/readings?hours=1&after_id=123&include_test=true`: readings in the window (at most 24 h), oldest first. If the window holds more than 1000 readings, they are evenly thinned to 1000. As a safeguard it reads at most the newest 20,000 rows, so if the ESP32 uploads far too often, the oldest part of the window is left out.
+  - `GET /api/recent?hours=24&limit=20&include_test=true`: the newest `limit` readings (at most 100) in the window, oldest first and never thinned. The log page's table shows them.
   - `POST /api/insights?hours=24&tz_offset_min=480`: the "AI check-up". It sends the same (up to 1000) readings as CSV, plus a description of the device and some precomputed statistics, to DeepSeek (`deepseek-flash`, low reasoning effort). It returns JSON: `status` (good / attention / urgent), `headline`, `summary` points and `advice` items. It allows at most one call per 15 s, so repeated clicks can't drain the API balance. A 24 h analysis takes about 10–15 s and about 30k tokens.
   - `GET /api/health`
   - `/`: serves the built frontend (`frontend/dist`). Files under `/assets/` have a content hash in their name and are cached for a year; `index.html` is re-checked on every load, so a redeploy shows up right away. Responses are gzip-compressed.
 - `frontend/`: a React + TypeScript app built with Vite (see [The frontend](#the-frontend) below).
 
-## Supabase prerequisites
+The backend is split into four modules:
 
-1. Run `sql_1.txt`, `sql_2.txt` and **`sql_3.txt`** in the Supabase SQL editor. Without `sql_3.txt`, the backend
-   gets `permission denied for table readings`.
-2. Check that the UUID in `sql_3.txt` is the UUID of the backend user (`Authentication → Users`).
+| File | Responsibility |
+|---|---|
+| `backend/main.py` | HTTP routes and validation, middleware, frontend serving, and HTTP client cleanup |
+| `backend/config.py` | Environment variables and shared constants |
+| `backend/readings.py` | Supabase client, token cache, filtering, and paginated reading retrieval |
+| `backend/insights.py` | AI prompts, cooldown, and DeepSeek requests |
+
+`main.py` calls the reading and insight functions; `insights.py` also calls
+`fetch_readings()` directly. The modules use sibling imports to keep the existing
+`uvicorn main:app` startup commands below working.
+
+## Supabase configuration
+
+See `sql_1.txt`, `sql_2.txt` and `sql_3.txt`.
 
 ## Run locally
 
@@ -102,18 +114,28 @@ already allows cross-origin requests.
 
 ## The frontend
 
-Four full-screen pages: **Overview** (live readings around a 3D infinity sign whose colour shows the soil moisture),
-**Trends** (charts), **Analysis** (AI check-up) and **Log** (states over time, recent readings). Scrolling first makes the
-page creep and resist; past a threshold it jumps to the next page, and the background, the colours and the 3D ribbon
-move with it. Arrow keys, Page Up/Down, Space, Home/End and the number keys 1–4 also work, as do swipes on a phone.
+Four full-screen pages, all in the same paper-and-ink colours. **Overview** shows the live readings around a 3D
+infinity sign (rhine-lock's, see below), plus two black windows: the soil moisture window (left) opens **Trends**
+(charts) and the AI check-up window (top right) opens **Analysis**.
+
+- **The windows zoom.** Click one and it turns into a small picture of its page, which flies out to fill the screen
+  while the rest of the overview fades and the infinity "unlocks" (its fins peel off and fly apart). Esc, the
+  "Overview" button or scrolling up plays it backwards: the page shrinks into its window and the infinity draws
+  itself in again. This is rhine-lock's unlock and lock animation, with the same timings.
+- **Scrolling** only moves between the overview and **Log** (states over time, recent readings): the page first creeps
+  and resists, and past a threshold it jumps, with a glitch burst.
+
+Arrow keys, Page Up/Down, Space and Home/End also work, as do swipes on a phone. With "reduce motion" turned on in the
+system settings, pages simply fade.
 
 | Library | Used for |
 |---|---|
 | [React](https://react.dev) 19 | components and state |
 | [TypeScript](https://www.typescriptlang.org) | types for the data and props |
 | [Vite](https://vite.dev) | dev server and production build |
-| [Motion](https://motion.dev) | the scroll position as an animated value, and the page transitions |
-| [three.js](https://threejs.org) + [React Three Fiber](https://r3f.docs.pmnd.rs) | the 3D ribbon (WebGL) |
+| [Motion](https://motion.dev) | the view position as an animated value, and the page transitions |
+| [three.js](https://threejs.org) | the 3D infinity (WebGL 2) |
+| [postprocessing](https://github.com/pmndrs/postprocessing) + [n8ao](https://github.com/N8python/n8ao) | its depth of field and ambient occlusion |
 | [d3-scale / d3-shape](https://d3js.org) | chart maths; the charts themselves are plain SVG |
 | [Fontsource](https://fontsource.org) | Montserrat and JetBrains Mono, served with the app |
 
@@ -123,23 +145,53 @@ Where to start reading:
 src/
   main.tsx              entry point: loads fonts and styles, renders <App/>
   App.tsx               wires everything: filters, data hooks, the pager, the four pages
-  config.ts             settings: calibration (SOIL_DRY_RAW / SOIL_WET_RAW), poll rate, pages
+  config.ts             settings: calibration (SOIL_DRY_RAW / SOIL_WET_RAW), poll rate, pages (and which open from where)
   hooks/
     useTelemetry.ts     loads readings, then polls /api/latest and fetches only new rows
     useAiCheckup.ts     the AI check-up request and its idle/running/done/error states
-    usePager.ts         wheel/touch/keyboard -> the "resist, then jump" page navigation
+    usePager.ts         wheel/touch/keyboard/clicks -> page navigation ("resist, then jump", and the window zoom)
   pages/                Overview, Trends, Analysis, Log
   charts/               LineChart (SVG + d3), StatesTimeline, ReadingsTable
-  components/           Chrome (top bar, rail, bottom bar), Backdrop, GlitchBurst, PageFrame, ...
-  scene/                the 3D ribbon: poses.ts (where it sits on each page), Ribbon.tsx, ribbonShader.ts
-  lib/                  API client and types, formatting, moisture maths, colours per page
+  components/           Chrome (top bar, rail, bottom bar), Backdrop, GlitchBurst, PageFrame, ZoomExtras, ...
+  scene/                the 3D infinity: Stage.ts (renderer, camera, lights, post-processing), finShaders.ts,
+                        framing.ts (where it sits), Scene.tsx (the React side), studio.hdr (its light probe)
+  lib/                  API client and types, formatting, moisture maths, status labels, zoom.ts (the window zoom)
   styles/               base.css (tokens, layers), chrome.css, pages.css
 ```
 
-The ribbon is one box shape drawn about 460 times with a custom shader (one draw call). Each slat works out its own
-place on the curve, so the band can breathe, twist and stream from one page's pose to the next. Its colour goes from
-white-ish blue (dry) to deep ultramarine (wet).
+### The infinity
+
+The infinity on the overview is the ∞ sculpture from [rhine-lock](https://github.com/tmc5csxr9m-cpu/rhine-lock),
+a screen locker by tmc5csxr9m-cpu: 400 rounded square fins on a figure-eight, lit by a key light, a fill light and a
+light probe, with shadows, ambient occlusion and depth of field. Its renderer, shaders, colours and motion are ported
+unchanged (`scene/Stage.ts`, `scene/finShaders.ts`, `scene/studio.hdr`), with four differences: the picture is
+mirrored, so the smaller loop is on the left; it's drawn on the dashboard's own paper (a transparent canvas); it's
+moved right of centre (rhine-lock's 16:9 frame is placed with a lens shift, which doesn't change how it looks); and
+the band's joint is closed. rhine-lock's band turns one and a half times per loop while every slat leans toward the
+same face, so where the band closes, the slats on either side lean opposite ways; rhine-lock hides that joint behind
+its login panel. Mirrored, it would sit in plain view at the far end of the left loop, so there the band turns back
+half a turn, and the slats line up all the way round.
+
+It's drawn at rhine-lock's own size: its frame is as tall as the screen (or as wide, on screens narrower than 16:9).
+The two windows may cover part of it, as rhine-lock's login panel covers part of its sculpture, but the text and the
+callouts never do: the callouts below it sit by the sculpture itself, and on screens too small to fit everything
+(under about 1440×900) it's drawn a little smaller. `scene/framing.ts` places it, and `pages.css` repeats the same
+rule for the layout around it. It draws itself in on the first visit, slides and fades with the overview when you
+scroll to the log, and stops rendering while the overview is away. It needs WebGL 2; without it the dashboard works
+the same, minus the infinity.
+
+Every click or tap sends a pulse along the band, as every key typed into rhine-lock's password field does: a swell
+runs out from the crossing and around the larger loop, the slats turning, growing and glowing lime as it passes, and
+it fades within about two seconds. Pressing a window sends one as its page starts to open (the press comes just
+before the click, so the pulse leads the zoom), and so does Enter on a focused window. There's no pulse on the other
+pages, where the infinity isn't drawn, or with reduced motion. `scene/Scene.tsx` sends them; the pulse itself is
+rhine-lock's, unchanged.
+
+**Licence:** rhine-lock is GNU AGPL-3.0-or-later, so these ported files are too, and so is anything that includes them.
+In particular, because the dashboard is served to other people over a network (Render), the AGPL asks that its complete
+source code be offered to them, for example with a link to this repository.
 
 While `npm run dev` is running, a few URL parameters help with design work (they don't exist in the production build):
-`?m=0.2` pretends the soil moisture is 20 %, `?p=1.5` freezes the view halfway between pages 2 and 3, and `?still`
-skips fade-ins.
+`?p=0.5#trends` freezes the view halfway from the overview to the page in the hash, and `?still` skips fade-ins and
+the infinity drawing itself in. In any build, `?q=low|high|ultra` sets the 3D quality (rhine-lock's setting; the default
+is ultra on the desktop layout and high on phones; low drops shadows, ambient occlusion and depth of field).

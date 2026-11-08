@@ -239,6 +239,19 @@
   height: 2px;
   background: var(--accent);
 }
+/* A page opened from the overview shows up indented under it */
+.rail .is-sub {
+  animation: rail-in 0.5s var(--ease) both;
+}
+.rail .is-sub button {
+  padding-right: 12px;
+}
+@keyframes rail-in {
+  from {
+    opacity: 0;
+    translate: 8px 0;
+  }
+}
 
 /* ===========================================================================
    Bottom bar
@@ -324,11 +337,6 @@
     translate: 0 3px;
   }
 }
-.page-count {
-  grid-column: 3;
-  grid-row: 1 / span 2;
-  justify-self: end;
-}
 
 /* Registration marks in the four corners */
 .corners i {
@@ -385,19 +393,20 @@
   .mini-sub,
   .clock,
   .link-detail,
-  .keys,
-  .page-count {
+  .keys {
     display: none;
   }
   .rail {
     right: 8px;
   }
-  .rail-label,
-  .rail-num {
+  .rail-label {
     display: none;
   }
   .rail button {
     padding: 6px 0;
+  }
+  .rail .is-sub button {
+    padding-right: 6px;
   }
   .rail .is-on .rail-tick {
     width: 18px;

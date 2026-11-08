@@ -1,22 +1,26 @@
-import type { MotionValue } from "motion/react";
-import { useMemo, type CSSProperties } from "react";
+import { motion, useTransform } from "motion/react";
+import { useMemo, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { AnimatedNumber } from "../components/AnimatedNumber";
 import { Icon, type IconName } from "../components/Icon";
 import { LeaderLines } from "../components/LeaderLines";
 import { PageFrame } from "../components/PageFrame";
-import { CONFIG } from "../config";
+import { CONFIG, PAGE_IDS } from "../config";
+import type { AiState } from "../hooks/useAiCheckup";
 import { useNow } from "../hooks/useNow";
+import type { Pager } from "../hooks/usePager";
 import type { Telemetry } from "../hooks/useTelemetry";
-import { ago, fmtClock } from "../lib/format";
+import { ago, fmtClock, fmtHM } from "../lib/format";
 import { moistureFraction, moistureWord } from "../lib/moisture";
 import { stats, toPoints } from "../lib/series";
-import { linkStatus, type Tone } from "../lib/status";
+import { AI_STATUS, linkStatus, type Tone } from "../lib/status";
+import { zoomFrame } from "../lib/zoom";
 import type { AnchorId } from "../scene/anchors";
 
 interface Props {
   telemetry: Telemetry;
   hours: number;
-  progress: MotionValue<number>;
+  ai: AiState;
+  pager: Pager;
   active: boolean;
   compact: boolean;
 }
@@ -35,7 +39,7 @@ interface Callout {
 const d = (delay: number) => ({ "--d": delay }) as CSSProperties;
 
 /** Page 1: the live state of the plant, arranged around the 3D infinity. */
-export function Overview({ telemetry, hours, progress, active, compact }: Props) {
+export function Overview({ telemetry, hours, ai, pager, active, compact }: Props) {
   const { latest, rows } = telemetry;
   const now = useNow(1000);
   const link = linkStatus(telemetry, now);
@@ -71,7 +75,7 @@ export function Overview({ telemetry, hours, progress, active, compact }: Props)
       value: reservoir == null ? "—" : reservoir ? "OK" : "Low",
       icon: reservoir == null ? undefined : reservoir ? "check" : "alert",
       tone: reservoir == null ? undefined : reservoir ? "good" : "critical",
-      sub: reservoir === false ? "Refill it: the pump has no water" : "The pump has water",
+      sub: reservoir == null ? "No reservoir reading" : reservoir ? "The pump has water" : "Refill it: the pump has no water",
     },
     {
       id: "faults", side: "bottom", tag: "Diagnostics", title: "Faults",
@@ -91,9 +95,26 @@ export function Overview({ telemetry, hours, progress, active, compact }: Props)
     `Faults · ${faults.length ? faults.join(", ") : "none"}`,
   ];
 
+  // During a window zoom (see lib/zoom.ts): --tile fades the window whose page opens or closes,
+  // --slide sends the other window off the screen as a page opens
+  const { zoom, zt } = pager;
+  const tile = useTransform(() => {
+    const t = zt.get();
+    return zoom ? zoomFrame(zoom.dir, t).tile : 1;
+  });
+  const slide = useTransform(() => {
+    const t = zt.get();
+    return zoom ? zoomFrame(zoom.dir, t).slide : 0;
+  });
+  const zoomRole = (page: string) => (!zoom ? undefined : PAGE_IDS[zoom.page] === page ? "origin" : "other");
+
   return (
-    <PageFrame index={0} id="overview" progress={progress} active={active}>
-      <div className="ov">
+    <PageFrame index={0} id="overview" pager={pager} active={active}>
+      <motion.div
+        className="ov"
+        data-zoom={zoom?.dir}
+        style={{ "--tile": tile, "--slide": slide } as unknown as CSSProperties}
+      >
         <div className="ov-brand reveal" style={d(0)}>
           <h1 id="overview-title" className="brand">
             <span className="brand-name">JUPITER PLUVIUS</span>
@@ -112,7 +133,7 @@ export function Overview({ telemetry, hours, progress, active, compact }: Props)
           <p className="micro">
             An MCXC444 reads the soil probe and relays it over UART to an ESP32, which uploads every reading
             to Supabase. The raw ADC falls as the soil gets wetter: {CONFIG.SOIL_DRY_RAW} in dry air reads as 0 %,{" "}
-            {CONFIG.SOIL_WET_RAW} in a wet tissue as 100 %.
+            {CONFIG.SOIL_WET_RAW} or lower as 100 %.
           </p>
         </section>
 
@@ -128,13 +149,14 @@ export function Overview({ telemetry, hours, progress, active, compact }: Props)
 
         <div className="ov-divider reveal" style={d(0.05)} aria-hidden="true" />
 
-        <section className="hero reveal" style={d(0.08)} aria-label="Soil moisture">
-          <span className="hero-tab">Soil moisture</span>
-          <div className="hero-card">
-            <div className="hero-top">
-              <span className="micro">Sensor · soil ADC</span>
-              <span className={`hero-dot status-${link.tone}`} title={link.label} />
-            </div>
+        {/* Two black windows, each opening its own page: soil moisture left of the infinity, and
+            the AI check-up in the top right corner */}
+        <div className="ov-moisture">
+          <Window
+            page="trends" tab="Soil moisture" label="Sensor · soil ADC" go="Trends" delay={0.08} pager={pager}
+            zoom={zoomRole("trends")} side={-1}
+            dot={<span className={`hero-dot status-${link.tone}`} title={link.label} />}
+          >
             <p className="hero-value">
               <AnimatedNumber value={f == null ? null : f * 100} />
               <span className="hero-unit">%</span>
@@ -176,8 +198,11 @@ export function Overview({ telemetry, hours, progress, active, compact }: Props)
                 <dd>{latest ? ago((now - latest.t) / 1000) : "—"}</dd>
               </div>
             </dl>
-          </div>
-        </section>
+          </Window>
+        </div>
+        <div className="ov-corner">
+          <AiWindow ai={ai} hours={hours} readings={rows.length} pager={pager} zoom={zoomRole("analysis")} />
+        </div>
 
         <div className="ov-callouts">
           {callouts.map((c, i) => (
@@ -200,7 +225,110 @@ export function Overview({ telemetry, hours, progress, active, compact }: Props)
         </div>
 
         {!compact && <LeaderLines />}
-      </div>
+      </motion.div>
     </PageFrame>
+  );
+}
+
+type ZoomRole = "origin" | "other" | undefined;
+
+/**
+ * A black window with a tab on top. The whole window is a link to its page: a plain click zooms the
+ * page out of the window (see lib/zoom.ts); a middle or Ctrl click still opens the page in a new tab.
+ * `zoom` says what it does during a zoom; `side` is where it slides off to when the other one opens.
+ */
+function Window({ page, tab, label, dot, go, delay, pager, zoom, side, children }: {
+  page: string; tab: string; label: string; dot: ReactNode; go: string; delay: number; pager: Pager;
+  zoom: ZoomRole; side: number; children: ReactNode;
+}) {
+  const open = (e: MouseEvent<HTMLAnchorElement>) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    pager.goTo(PAGE_IDS.indexOf(page), e.currentTarget);
+  };
+  return (
+    <a
+      className={`win win-${page} reveal${zoom ? ` is-${zoom}` : ""}`}
+      style={{ ...d(delay), "--side": side } as CSSProperties}
+      href={`#${page}`}
+      data-window={page}
+      onClick={open}
+    >
+      <span className="hero-tab">{tab}</span>
+      <div className="hero-card">
+        <div className="hero-top">
+          <span className="micro">{label}</span>
+          <span className="win-go micro">
+            {go}
+            <Icon name="right" size={12} />
+          </span>
+          {dot}
+        </div>
+        {children}
+      </div>
+    </a>
+  );
+}
+
+/** The AI check-up window: the latest report's verdict, or what's happening instead. */
+function AiWindow({ ai, hours, readings, pager, zoom }: {
+  ai: AiState; hours: number; readings: number; pager: Pager; zoom: ZoomRole;
+}) {
+  let tone: Tone = "muted";
+  let icon: IconName | null = null;
+  let title = "No report yet";
+  let text = `Open it to have DeepSeek read the last ${hours} h of readings.`;
+  let report = "—";
+  let advice = "—";
+  let read = String(readings);
+
+  if (ai.phase === "running") {
+    title = "Analysing…";
+    text = `DeepSeek is reading the last ${ai.hours} h.`;
+    report = advice = "…";
+  } else if (ai.phase === "error") {
+    const wait = /wait/i.test(ai.message);
+    tone = wait ? "warning" : "critical";
+    icon = wait ? "alert" : "stop";
+    title = wait ? "Cooling down" : "Request failed";
+    text = ai.message;
+  } else if (ai.phase === "done") {
+    const { result } = ai;
+    const status = AI_STATUS[result.status ?? "attention"] ?? AI_STATUS.attention;
+    tone = status.tone;
+    icon = status.icon;
+    title = status.label;
+    text = result.headline ?? result.summary?.[0] ?? result.raw ?? "";
+    report = fmtHM(ai.at);
+    advice = result.advice ? String(result.advice.length) : "—";
+    read = String(result.readings);
+  }
+
+  return (
+    <Window
+      page="analysis" tab="AI check-up" label={`DeepSeek · last ${ai.phase === "idle" ? hours : ai.hours} h`}
+      go="Analysis" delay={0.14} pager={pager} zoom={zoom} side={1}
+      dot={<span className={`hero-dot status-${tone}${ai.phase === "running" ? " is-pulsing" : ""}`} />}
+    >
+      <p className={`ai-win-title status-${tone}`}>
+        {ai.phase === "running" ? <span className="spinner" aria-hidden="true" /> : icon && <Icon name={icon} size={20} />}
+        {title}
+      </p>
+      <p className="ai-win-text">{text}</p>
+      <dl className="hero-meta">
+        <div>
+          <dt>Report</dt>
+          <dd>{report}</dd>
+        </div>
+        <div>
+          <dt>Advice</dt>
+          <dd>{advice}</dd>
+        </div>
+        <div>
+          <dt>Readings</dt>
+          <dd>{read}</dd>
+        </div>
+      </dl>
+    </Window>
   );
 }

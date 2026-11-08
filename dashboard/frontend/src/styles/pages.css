@@ -1,18 +1,11 @@
 /* ===========================================================================
-   Page header (pages 2-4, see components/PageHeader.tsx)
+   Page header (trends, analysis, log; see components/PageHeader.tsx)
    =========================================================================== */
 .ph {
   display: flex;
   align-items: flex-end;
   gap: clamp(14px, 2vw, 30px);
   margin-bottom: clamp(16px, 2.6vh, 30px);
-}
-.ph-num {
-  flex: none;
-  font: 200 clamp(64px, 8vw, 124px)/0.78 var(--font-sans);
-  letter-spacing: -0.03em;
-  color: transparent;
-  -webkit-text-stroke: 1px var(--ink);
 }
 .ph-body {
   display: grid;
@@ -22,6 +15,24 @@
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.ph-back {
+  gap: 6px;
+  padding: 5px 9px 5px 7px;
+  border: 0;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+}
+.ph-back .icon {
+  transition: translate 0.3s var(--ease);
+}
+.ph-back:hover {
+  background: transparent;
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+.ph-back:hover .icon {
+  translate: -3px 0;
 }
 .ph-title {
   font: 800 clamp(30px, 3.4vw, 52px)/0.95 var(--font-sans);
@@ -46,7 +57,7 @@
 }
 
 /* ===========================================================================
-   01 Overview
+   Overview
    =========================================================================== */
 .page-overview .page-inner {
   padding: 0;
@@ -58,16 +69,38 @@
   min-height: 620px;
   /* Right edge of the text column on the left (dossier, event feed) */
   --column-end: min(21vw, var(--pad-x) + 280px);
-  /* How far the infinity ever reaches: left, and right at the light callout's height. These mirror the
-     overview pose in scene/poses.ts (centre 12vw right of the middle, radius min(23.5vw, 43vh)): with the
-     band's width, the rocking and the perspective, its outermost slats reach 1.25 radii left of the centre
-     and 1.18 radii right. Update them if you move or resize it there. */
-  --ribbon-left: calc(62vw - 1.25 * min(23.5vw, 43vh));
-  --ribbon-right: calc(62vw + 1.18 * min(23.5vw, 43vh));
-  /* The moisture card sits just clear of the infinity, but never over the text column. On narrower
-     screens there's no room, so it overlaps the infinity's left loop a little. */
+  /* Where the infinity is. These mirror scene/framing.ts: rhine-lock's frame is --ribbon-h tall (the
+     screen's height, or 9/16 of its width, or less where the room between the text column and the light
+     callout, or above the bottom row of callouts, is short), and the sculpture, rocking and parallax
+     included, spans 1.25 times that across: centred at 62vw where there's room, else moved left.
+     Update them together. */
+  --ribbon-h: min(100vh, 56.25vw, (100vw - var(--pad-x) - 154px - var(--column-end) - 24px) / 1.25,
+    (50vh - 170px - clamp(22px, 1.9vw, 30px)) / 0.298);
+  --ribbon-left: clamp(var(--column-end) + 24px, 62vw - 0.625 * var(--ribbon-h),
+    100vw - var(--pad-x) - 154px - 1.25 * var(--ribbon-h));
+  --ribbon-right: calc(var(--ribbon-left) + 1.25 * var(--ribbon-h));
+  /* rhine-lock's 16:9 frame: its centre across and its width, so callouts can sit by parts of the sculpture
+     (x 0.47 of the frame is where its strands cross) */
+  --frame-x: calc(var(--ribbon-left) + 0.608 * var(--ribbon-h));
+  --frame-w: calc(16 / 9 * var(--ribbon-h));
+  /* The bottom row of callouts: 24px under the left loop's lowest fin, 0.298 * --ribbon-h below the
+     middle of the screen. Its two callouts are at most --row-w wide; the faults one starts at --faults-x:
+     under the left loop's far end (x 0.17 of the frame), or further left where both, at their widest,
+     wouldn't fit side by side before the reservoir ends under the crossing (x 0.54) */
+  --row-bottom: calc(50vh + 0.298 * var(--ribbon-h) + 24px);
+  --row-w: min(240px, max(15vw, 212px));
+  --faults-x: max(var(--column-end) + 24px, min(var(--frame-x) - 0.33 * var(--frame-w),
+    var(--frame-x) + 0.04 * var(--frame-w) - 2 * var(--row-w) - 40px));
+  /* Both windows are --hero-w wide. The soil moisture window sits about 3/16 of the way across, but never
+     over the text column; it may cover part of the infinity's left loop, as rhine-lock's login panel
+     covers part of its sculpture. */
   --hero-w: clamp(300px, 24vw, 390px);
-  --hero-x: max(var(--column-end) + 24px, min(22.5vw, var(--ribbon-left) - var(--hero-w) - 16px));
+  --hero-x: max(var(--column-end) + 24px, 18.75vw);
+  /* The brand's name (.brand-name: about 9.6em wide), and where the brand block ends (30px down, then its
+     lines; see .brand below). The soil moisture window is centred between it and the bottom row. */
+  --brand-font: clamp(30px, 3.3vw, 54px);
+  --brand-bottom: calc(71px + 1.95 * var(--brand-font) + 1.26 * clamp(11px, 1.05vw, 16px));
+  --divider-x: calc(var(--hero-x) + 8vw);
 }
 .ov-brand {
   position: absolute;
@@ -140,21 +173,87 @@
     opacity: 0;
   }
 }
+/* A rule from top to bottom that moves with the soil moisture window, behind it. It starts under the brand
+   where it would cross the brand's name, and stops above the bottom row where it would run through the
+   faults callout: each clamp() is 0 unless the rule would cross, when the product is large and capped. */
 .ov-divider {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  left: calc(var(--hero-x) + 8vw); /* moves with the card */
+  top: clamp(0px, (var(--pad-x) + 9.6 * var(--brand-font) + 24px - var(--divider-x)) * 1000,
+    var(--brand-bottom) + 24px);
+  bottom: clamp(0px, min(var(--divider-x) - var(--faults-x) + 24px, var(--faults-x) + var(--row-w) + 8px - var(--divider-x)) * 1000,
+    100% - var(--row-bottom) + 24px);
+  left: var(--divider-x);
   width: 1px;
   background: color-mix(in srgb, var(--ink) 55%, transparent);
 }
 
-/* The black moisture card, just left of the infinity */
-.hero {
+/* The two black windows, each a link to its page. Soil moisture sits by the infinity's left loop; the
+   AI check-up is in the top right corner (.ov-corner below). Both may cover a little of the infinity.
+   Sizes shrink a little on short screens. */
+.ov-moisture {
   position: absolute;
-  top: 35vh;
+  z-index: 2; /* in front of the leader lines, which pass behind them */
+  top: calc((var(--brand-bottom) + var(--row-bottom)) / 2);
   left: var(--hero-x);
   width: var(--hero-w);
+  transform: translateY(-50%);
+}
+.win {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.win:focus-visible {
+  outline: none; /* the card shows the focus ring instead */
+}
+/* "Trends ->" / "Analysis ->": where the window leads, next to its status dot */
+.win-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  transition: color 0.25s;
+}
+.win-go .icon {
+  transition: translate 0.35s var(--ease);
+}
+.hero-top .win-go {
+  color: rgba(244, 244, 242, 0.5);
+}
+.win:hover .win-go,
+.win:focus-visible .win-go {
+  color: #f4f4f2;
+}
+.win:hover .win-go .icon,
+.win:focus-visible .win-go .icon {
+  translate: 4px 0;
+}
+.win .hero-card {
+  transition: transform 0.35s var(--ease), box-shadow 0.35s var(--ease);
+}
+.win:hover .hero-card,
+.win:focus-visible .hero-card {
+  transform: translateY(-3px);
+  box-shadow: 0 42px 80px -38px rgba(0, 0, 0, 0.72);
+}
+.win:focus-visible .hero-card {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.win:active .hero-card {
+  transform: translateY(-1px);
+}
+/* During a window zoom (see lib/zoom.ts): the window whose page opens (or closes back) fades as the
+   page takes its place (--tile); as a page opens, the other window slides off the screen, the way
+   rhine-lock's personnel panel leaves (--slide, eased in, fading only at the very end). */
+.ov[data-zoom] .win.is-origin {
+  opacity: var(--tile);
+  translate: none;
+}
+.ov[data-zoom="open"] .win.is-other {
+  opacity: calc(1 - clamp(0, (var(--slide) - 0.85) / 0.15, 1));
+  translate: calc(var(--side) * var(--slide) * var(--slide) * var(--slide) * 50vw) 0;
 }
 .hero-tab {
   display: inline-block;
@@ -169,7 +268,7 @@
 }
 .hero-card {
   position: relative;
-  padding: 18px 22px 18px;
+  padding: clamp(10px, 1.7vh, 18px) 22px;
   background:
     radial-gradient(ellipse 90% 70% at 20% 0%, rgba(255, 255, 255, 0.09), transparent 70%),
     #0c0d10;
@@ -178,8 +277,8 @@
 }
 .hero-top {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 14px;
 }
 .hero-top .micro {
   color: rgba(244, 244, 242, 0.55);
@@ -191,9 +290,12 @@
   background: var(--status, #6b6b6b);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--status, #6b6b6b) 22%, transparent);
 }
+.hero-dot.is-pulsing {
+  animation: pulse 2s ease-out infinite;
+}
 .hero-value {
   margin-top: 6px;
-  font: 800 clamp(66px, 6.4vw, 104px)/0.92 var(--font-sans);
+  font: 800 clamp(48px, min(6.4vw, 8vh), 104px)/0.92 var(--font-sans);
   letter-spacing: -0.025em;
 }
 .hero-unit {
@@ -210,7 +312,7 @@
   text-transform: uppercase;
 }
 .meter {
-  margin-top: 18px;
+  margin-top: clamp(10px, 1.9vh, 18px);
 }
 .meter-track {
   position: relative;
@@ -238,8 +340,8 @@
   grid-template-columns: repeat(3, auto);
   justify-content: space-between;
   gap: 12px;
-  margin-top: 18px;
-  padding-top: 13px;
+  margin-top: clamp(10px, 1.9vh, 18px);
+  padding-top: clamp(9px, 1.4vh, 13px);
   border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 .hero-meta dt {
@@ -252,6 +354,64 @@
   margin-top: 5px;
   font: 600 12px/1 var(--font-mono);
   font-variant-numeric: tabular-nums;
+}
+
+/* The AI check-up window: the latest verdict and its headline */
+.ai-win-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: clamp(8px, 1.4vh, 12px);
+  font: 800 clamp(19px, min(1.6vw, 3vh), 26px)/1.1 var(--font-sans); /* "Needs attention" fits on one line */
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.ai-win-title .icon {
+  flex: none;
+  color: var(--status);
+}
+.ai-win-title .spinner {
+  flex: none;
+  color: rgba(244, 244, 242, 0.7);
+}
+.ai-win-text {
+  display: -webkit-box;
+  min-height: 3em; /* two lines, so the window keeps its height whatever it says */
+  margin-top: 8px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  font: 500 12.5px/1.5 var(--font-sans);
+  color: rgba(244, 244, 242, 0.72);
+}
+
+/* The AI check-up window in the top right corner, under the top bar. Taller screens leave a bigger
+   gap under the top bar: up to 32px more. The top of the infinity's right loop passes behind the
+   window, so the full report (with Report / Advice / Readings) only shows on screens at least 1100px
+   tall and 2500px wide; elsewhere it's the verdict and one line, and covers less of the loop. */
+.ov-corner {
+  position: absolute;
+  z-index: 2;
+  top: calc(72px + clamp(0px, (100vh - 1000px) / 10, 32px));
+  right: var(--pad-x);
+  width: var(--hero-w);
+}
+@media (max-height: 1099px) and (min-width: 900px) and (min-aspect-ratio: 1/1),
+  (max-width: 2499px) and (min-width: 900px) and (min-aspect-ratio: 1/1) {
+  .ov-corner .hero-meta {
+    display: none;
+  }
+  .ov-corner .ai-win-text {
+    min-height: 1.5em;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+}
+@media (max-height: 700px) and (min-width: 900px) and (min-aspect-ratio: 1/1) {
+  .ov-corner .ai-win-text {
+    display: none; /* the loop comes up even higher: just the verdict */
+  }
 }
 
 /* Callouts around the infinity (desktop); each has a pin where its leader line starts */
@@ -302,15 +462,24 @@
   top: 3px;
 }
 .callout-temp { top: 6vh; left: 38vw; }
-.callout-humidity { top: 7vh; left: 67vw; }
+.callout-humidity { top: 7vh; left: 52vw; } /* next to the temperature, out of the AI window's way */
 /* Just clear of the infinity's right loop (24px leaves its pin 8px clear), but never past the right margin
    (the callout is about 130px wide): on narrower screens there's no room, so it overlaps the loop a little. */
 .callout-light { top: 62vh; left: min(100% - var(--pad-x) - 130px, max(84vw, var(--ribbon-right) + 24px)); }
-.callout-reservoir { top: 81vh; left: 55vw; }
-.callout-faults { top: 81vh; left: 35vw; }
+/* The bottom row sits by the sculpture itself (see --row-bottom and --faults-x): the reservoir ends under
+   the crossing (x 0.54 of the frame), where the band is high enough. Both may be a little wider than the
+   other callouts, so the reservoir's line never wraps (and the row stays above the scroll cue). */
+.callout-reservoir,
+.callout-faults {
+  top: var(--row-bottom);
+  max-width: var(--row-w);
+}
+.callout-reservoir { right: calc(100% - var(--frame-x) - 0.04 * var(--frame-w)); }
+.callout-faults { left: var(--faults-x); }
 
 .leaders {
   position: absolute;
+  z-index: 1;
   inset: 0;
   width: 100%;
   height: 100%;
@@ -331,7 +500,7 @@
 }
 
 /* ===========================================================================
-   02 Trends
+   Trends
    =========================================================================== */
 .page-trends .page-inner {
   display: flex;
@@ -469,7 +638,7 @@
 }
 
 /* ===========================================================================
-   03 Analysis
+   Analysis
    =========================================================================== */
 .an-grid {
   display: grid;
@@ -690,7 +859,7 @@
 }
 
 /* ===========================================================================
-   04 Log
+   Log
    =========================================================================== */
 .lg {
   display: grid;
@@ -837,7 +1006,8 @@
   .ov-brand,
   .ov-dossier,
   .ov-feed,
-  .hero,
+  .ov-moisture,
+  .ov-corner,
   .ov-callouts,
   .callout {
     position: static;
@@ -849,7 +1019,8 @@
     height: 34vh;
   }
   .ov-brand { order: 0; }
-  .hero { order: 2; max-width: 460px; }
+  .ov-moisture { order: 2; max-width: 460px; transform: none; }
+  .ov-corner { order: 2; max-width: 460px; }
   .ov-callouts { order: 3; display: grid; grid-template-columns: 1fr 1fr; gap: 20px 14px; pointer-events: auto; }
   .ov-dossier { order: 4; }
   .ov-feed { order: 5; }
@@ -893,9 +1064,6 @@
     max-height: none;
     overflow: visible;
     padding: 20px;
-  }
-  .ph-num {
-    font-size: 58px;
   }
   .ph-ruler {
     display: none;

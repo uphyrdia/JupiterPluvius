@@ -10,7 +10,7 @@ export default defineConfig({
     proxy: { "/api": "http://localhost:8000" },
   },
   build: {
-    // The 3D chunk (three.js + React Three Fiber) is ~930 kB before gzip; it's loaded lazily anyway.
+    // The 3D chunk (three.js and its post-processing) is about 1 MB before gzip; it's loaded lazily anyway.
     chunkSizeWarningLimit: 1000,
   },
 });

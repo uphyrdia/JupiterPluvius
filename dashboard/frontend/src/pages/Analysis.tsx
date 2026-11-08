@@ -1,10 +1,11 @@
-import type { MotionValue } from "motion/react";
 import type { CSSProperties } from "react";
 import { Icon } from "../components/Icon";
 import { PageFrame } from "../components/PageFrame";
 import { PageHeader } from "../components/PageHeader";
+import { PAGE_IDS, parentOf } from "../config";
 import type { AiState } from "../hooks/useAiCheckup";
 import { useNow } from "../hooks/useNow";
+import type { Pager } from "../hooks/usePager";
 import { fmtClock, pad2 } from "../lib/format";
 import { AI_PRIORITY, AI_STATUS } from "../lib/status";
 
@@ -14,19 +15,26 @@ interface Props {
   hours: number;
   includeTest: boolean;
   readings: number;
-  progress: MotionValue<number>;
+  pager: Pager;
   active: boolean;
 }
 
+const INDEX = PAGE_IDS.indexOf("analysis");
 const d = (delay: number) => ({ "--d": delay }) as CSSProperties;
 
-/** Page 3: the AI check-up. DeepSeek (via the backend) summarises the readings in range. */
-export function Analysis({ ai, onRun, hours, includeTest, readings, progress, active }: Props) {
+/**
+ * The AI check-up: DeepSeek (via the backend) summarises the readings in range.
+ * Opens from the overview's AI check-up window.
+ */
+export function Analysis({ ai, onRun, hours, includeTest, readings, pager, active }: Props) {
   const running = ai.phase === "running";
   return (
-    <PageFrame index={2} id="analysis" progress={progress} active={active}>
+    <PageFrame index={INDEX} id="analysis" pager={pager} active={active}>
       <div className="an">
-        <PageHeader n={3} id="analysis" title="Analysis" kicker="AI check-up · DeepSeek" active={active} />
+        <PageHeader
+          id="analysis" title="Analysis" kicker="AI check-up · DeepSeek" active={active}
+          onBack={() => pager.goTo(parentOf(INDEX))}
+        />
 
         <div className="an-grid">
           <aside className="an-side reveal" style={d(0.12)}>

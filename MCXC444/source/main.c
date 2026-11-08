@@ -29,21 +29,21 @@
 #include "gpio.h"
 #include "adc.h"
 #include "cmp.h"
-#include "pwm.h"
 #include "uart.h"
 
 #define QLEN	5
 
-#define LIGHT_ADC_THRESHOLD				1000U
+/* Lower ADC values mean brighter light: below the threshold is bright, at or above
+ * it is dark (same rule as LIGHT_STATE_THRESHOLD on the ESP32). */
+#define LIGHT_ADC_THRESHOLD				1000
 /* Higher ADC values mean drier soil. */
 #define SOIL_MOISTURE_ADC_THRESHOLD    	1600U
 
 #define SOIL_MOISTURE_SAMPLING_PERIOD	 500U
 #define SEND_INTERVAL_MS				1000U
-#define PUMP_COOLDOWN_MS               60000U
+#define PUMP_COOLDOWN_MS               30000U
 
 QueueHandle_t queue;
-SemaphoreHandle_t led_sema;
 SemaphoreHandle_t pump_sema;
 SemaphoreHandle_t reservoir_level_sema;
 SemaphoreHandle_t print_mutex;
@@ -52,8 +52,6 @@ SemaphoreHandle_t uart_sema;
 static unsigned int moisture = 1000;
 volatile bool reservoir_level_ok; // initialized in initCMP0()
 
-static bool pumping = false;
-static bool alarming = false;
 static bool lighting = false;
 
 static float temperature = 0.0f;
@@ -62,36 +60,32 @@ static int light_adc = 0;
 
 static void recvTask(void *p)
 {
+	static TMessage msg;
 	for (;;) {
-		static TMessage msg;
 		while (xQueueReceive(queue, (void *)&msg, portMAX_DELAY) != pdTRUE) {}
 		if (!UART2_Decode(&msg)) continue;
-		/*
-		 * Payload after frame/CRC validation:
-		 *   "TEMP:22.1,HUM:53.5,LIGHT_ADC:586"
-		 * Missing fields retain their previous values.
-		 */
-		char *field = NULL;
 
-		field = strstr(msg.message, "TEMP:");
-		if (field != NULL)
-			temperature = strtof(field + 5, NULL);
+		float parsed_temperature;
+		float parsed_humidity;
+		int parsed_light_adc;
 
-		field = strstr(msg.message, "HUM:");
-		if (field != NULL)
-			humidity = strtof(field + 4, NULL);
+		int matched = sscanf(msg.message,
+		                     "TEMP:%f,HUM:%f,LIGHT_ADC:%d",
+		                     &parsed_temperature,
+		                     &parsed_humidity,
+		                     &parsed_light_adc);
+		if (matched == 3) {
+		    temperature = parsed_temperature;
+		    humidity = parsed_humidity;
+		    light_adc = parsed_light_adc;
+		}
 
-		field = strstr(msg.message, "LIGHT_ADC:");
-		if (field != NULL)
-			light_adc = (int)strtol(field + 10, NULL, 10);
-
-		/* Lighting control logic */
-		if (lighting && light_adc < LIGHT_ADC_THRESHOLD) {
-			offLED();
-			lighting = false;
-		} else if (!lighting && light_adc > LIGHT_ADC_THRESHOLD) {
-			onLED();
-			lighting = true;
+		/* Lighting control logic: the LED is on exactly when it is dark. */
+		bool dark = light_adc >= LIGHT_ADC_THRESHOLD;
+		if (dark != lighting) {
+			if (dark) onLED();
+			else offLED();
+			lighting = dark;
 		}
 
 		/* Print the parsed readings for debugging. */
@@ -105,11 +99,11 @@ static void recvTask(void *p)
 
 static void sendTask(void *p)
 {
+	static TMessage msg;
 	for (;;) {
-		static TMessage msg;
 		snprintf(msg.message, MAX_MSG_LEN,
-				"SOIL:%u,WATER:%d,PUMP:%d,ALARM:%d,LED:%d",
-				moisture, reservoir_level_ok, pumping, alarming, lighting);
+				"SOIL:%u,WATER:%d,LED:%d",
+				moisture, reservoir_level_ok, lighting);
 		UART2_Send(&msg);
 		vTaskDelay(pdMS_TO_TICKS(SEND_INTERVAL_MS));
 	}
@@ -119,16 +113,15 @@ static void pumpTask(void *p)
 {
 	for (;;) {
 		while (xSemaphoreTake(pump_sema, portMAX_DELAY) != pdTRUE) {}
+		if (moisture <= SOIL_MOISTURE_ADC_THRESHOLD) continue;
 
 		unsigned int duration_ms = 3000U;
 		if (temperature >= 30.0f || humidity <= 45.0f)
 			duration_ms += 1000U;
 
 		onPump();
-		pumping = true;
 		vTaskDelay(pdMS_TO_TICKS(duration_ms));
 		offPump();
-		pumping = false;
 
 		vTaskDelay(pdMS_TO_TICKS(PUMP_COOLDOWN_MS));
 	}
@@ -142,8 +135,7 @@ static void soil_moisture_sensor_task(void *p)
 		if (moisture > SOIL_MOISTURE_ADC_THRESHOLD)
 			xSemaphoreGive(pump_sema);
 
-		if (xSemaphoreTake(print_mutex, portMAX_DELAY) == pdTRUE)
-		{
+		if (xSemaphoreTake(print_mutex, portMAX_DELAY) == pdTRUE) {
 			PRINTF("Soil moisture ADC: %u\r\n", moisture); // Raw 0..4095
 			xSemaphoreGive(print_mutex);
 		}
@@ -151,22 +143,22 @@ static void soil_moisture_sensor_task(void *p)
 	}
 }
 
+/* The buzzer sounds while the reservoir is low. */
+static void updateBuzzer(void)
+{
+	if (reservoir_level_ok) offBuzzer();
+	else onBuzzer();
+}
+
 static void water_level_sensor_task(void *p)
 {
-    if (reservoir_level_ok)
-        offBuzzer();
-    else
-        onBuzzer();
+	updateBuzzer();
 	for (;;) {
 		while (xSemaphoreTake(reservoir_level_sema, portMAX_DELAY) != pdTRUE) {}
-		if (reservoir_level_ok)
-			offBuzzer();
-		else
-			onBuzzer();
+		updateBuzzer();
 
-		if (xSemaphoreTake(print_mutex, portMAX_DELAY) == pdTRUE)
-		{
-			PRINTF("Water Level: %d\r\n", reservoir_level_ok);
+		if (xSemaphoreTake(print_mutex, portMAX_DELAY) == pdTRUE) {
+			PRINTF("Reservoir level: %d\r\n", reservoir_level_ok);
 			xSemaphoreGive(print_mutex);
 		}
 	}
@@ -189,13 +181,13 @@ int main(void)
 
 	queue = xQueueCreate(QLEN, sizeof(TMessage));
 
-	pump_sema = xSemaphoreCreateBinary(); // initialized to 0
-	reservoir_level_sema = xSemaphoreCreateBinary();
-	uart_sema = xSemaphoreCreateBinary();
+	pump_sema = xSemaphoreCreateBinary(); // semaphore is initialized to 0
+	reservoir_level_sema = xSemaphoreCreateBinary(); // given from ISR
+	uart_sema = xSemaphoreCreateBinary(); // given from ISR, signals transmitter is free
 
-	xSemaphoreGive(uart_sema); // Initialize the UART semaphore to 1.
+	xSemaphoreGive(uart_sema); // Initialize it to 1 so that the transmission can start
 
-	print_mutex = xSemaphoreCreateMutex(); // initialized to 1
+	print_mutex = xSemaphoreCreateMutex(); // mutex is initialized to 1
 
 	initGPIO();
 	initADC0();

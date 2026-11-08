@@ -1,15 +1,16 @@
 import { motion, useTransform, type MotionStyle, type MotionValue } from "motion/react";
-import { PAGES, RANGES } from "../config";
-import type { Pager } from "../hooks/usePager";
+import { PAGES, parentOf, RANGES } from "../config";
+import { neighbour, SCROLL, type Pager } from "../hooks/usePager";
 import { useNow } from "../hooks/useNow";
 import type { Telemetry } from "../hooks/useTelemetry";
-import { fmtClock, pad2, utcOffset } from "../lib/format";
+import { fmtClock, utcOffset } from "../lib/format";
 import { linkStatus } from "../lib/status";
 import { Icon } from "./Icon";
 import { ScrambleText } from "./ScrambleText";
 
 interface Props {
   pager: Pager;
+  overview: MotionValue<number>; // how far the overview is from the view, in pages
   telemetry: Telemetry;
   hours: number;
   onHours: (h: number) => void;
@@ -18,11 +19,14 @@ interface Props {
 }
 
 /** Everything that stays put while the pages move: top bar, section rail, bottom bar, corner marks. */
-export function Chrome({ pager, telemetry, hours, onHours, includeTest, onIncludeTest }: Props) {
-  const { progress, index, goTo, pull } = pager;
+export function Chrome({ pager, overview, telemetry, hours, onHours, includeTest, onIncludeTest }: Props) {
+  const { index, goTo, pull } = pager;
   // The compact brand and the filters fade in once you leave the overview, which has its own big brand.
-  const away = useTransform(progress, [0.35, 0.9], [0, 1]);
-  const awayEvents = useTransform(progress, (p) => (p > 0.5 ? "auto" : "none"));
+  const away = useTransform(overview, (o) => Math.min(1, Math.max(0, (Math.abs(o) - 0.35) / 0.55)));
+  const awayEvents = useTransform(overview, (o) => (Math.abs(o) > 0.5 ? "auto" : "none"));
+  // The rail lists the scroll (overview, log); a page opened from a window shows up under its parent.
+  const detail = parentOf(index) >= 0;
+  const rail = SCROLL.flatMap((i) => (detail && parentOf(index) === i ? [i, index] : [i]));
 
   return (
     <>
@@ -62,17 +66,16 @@ export function Chrome({ pager, telemetry, hours, onHours, includeTest, onInclud
 
       <nav className="rail" aria-label="Sections">
         <ol>
-          {PAGES.map((p, i) => (
-            <li key={p.id}>
+          {rail.map((i) => (
+            <li key={PAGES[i].id} className={parentOf(i) >= 0 ? "is-sub" : undefined}>
               <button
                 type="button"
                 className={i === index ? "is-on" : undefined}
-                aria-current={i === index ? "step" : undefined}
+                aria-current={i === index ? "page" : undefined}
                 onClick={() => goTo(i)}
               >
-                <span className="rail-label">{p.label}</span>
+                <span className="rail-label">{PAGES[i].label}</span>
                 <span className="rail-tick" aria-hidden="true" />
-                <span className="rail-num">{pad2(i + 1)}</span>
               </button>
             </li>
           ))}
@@ -81,22 +84,22 @@ export function Chrome({ pager, telemetry, hours, onHours, includeTest, onInclud
 
       <footer className="bottombar">
         <div className="keys" aria-hidden="true">
-          <span>
-            <kbd>↑</kbd>
-            <kbd>↓</kbd> NAVIGATE
-          </span>
-          <span>
-            <kbd>1</kbd>–<kbd>4</kbd> JUMP
-          </span>
+          {detail ? (
+            <span>
+              <kbd>Esc</kbd> BACK
+            </span>
+          ) : (
+            <span>
+              <kbd>↑</kbd>
+              <kbd>↓</kbd> NAVIGATE
+            </span>
+          )}
         </div>
         <p className="section-label">
           <i aria-hidden="true" />
-          <ScrambleText text={`${pad2(index + 1)} · ${PAGES[index].label.toUpperCase()}`} play delay={250} />
+          <ScrambleText text={PAGES[index].label.toUpperCase()} play delay={250} />
         </p>
         <ScrollCue pull={pull} index={index} goTo={goTo} />
-        <p className="page-count micro" aria-hidden="true">
-          {pad2(index + 1)} / {pad2(PAGES.length)}
-        </p>
       </footer>
 
       <div className="corners" aria-hidden="true">
@@ -135,17 +138,25 @@ function Clock() {
   );
 }
 
-/** "Scroll" hint whose bar fills as a wheel/swipe gesture approaches the jump threshold. */
+/**
+ * "Scroll" hint whose bar fills as a wheel/swipe gesture approaches the jump threshold. On the log it
+ * leads back to the top, and on a page opened from the overview it leads back to the overview.
+ */
 function ScrollCue({ pull, index, goTo }: { pull: MotionValue<number>; index: number; goTo: (i: number) => void }) {
-  const last = index === PAGES.length - 1;
   const fill = useTransform(pull, (v) => Math.min(1, Math.abs(v)));
+  const back = parentOf(index);
+  const next = neighbour(index, 1);
+  const [text, icon, to] =
+    back >= 0 ? (["BACK", "up", back] as const)
+    : next >= 0 ? (["SCROLL", "down", next] as const)
+    : (["BACK TO TOP", "up", SCROLL[0]] as const);
   return (
-    <button type="button" className="cue" onClick={() => goTo(last ? 0 : index + 1)}>
-      <span className="cue-text">{last ? "BACK TO TOP" : "SCROLL"}</span>
+    <button type="button" className="cue" onClick={() => goTo(to)}>
+      <span className="cue-text">{text}</span>
       <span className="cue-track" aria-hidden="true">
         <motion.span className="cue-fill" style={{ scaleX: fill }} />
       </span>
-      <Icon name={last ? "up" : "down"} size={12} />
+      <Icon name={icon} size={12} />
     </button>
   );
 }

@@ -9,13 +9,16 @@ interface Track {
   color: string;
 }
 
+// Every row is labelled, so the colours only need to stand out from the track on the paper: the grey,
+// violet, blue and red bands have over 3:1 contrast against it; ochre (sunlight) and the reserved
+// "serious" orange are lighter, and each row also prints its share of readings as text.
 const TRACKS: Track[] = [
-  { key: "data", label: "Readings received", test: () => true, color: "rgba(238, 241, 255, 0.55)" },
-  { key: "light", label: "Ambient light · bright", test: (r) => r.light_state === true, color: "#eda100" },
-  { key: "led", label: "Grow LED · on", test: (r) => r.led_state === true, color: "#9085e9" },
+  { key: "data", label: "Readings received", test: () => true, color: "#6f6e69" },
+  { key: "light", label: "Ambient light · bright", test: (r) => r.light_state === true, color: "#b87800" },
+  { key: "led", label: "Grow LED · on", test: (r) => r.led_state === true, color: "#6c5fd6" },
   { key: "reservoir", label: "Reservoir · low", test: (r) => r.reservoir_state === false, color: "var(--critical)" },
   { key: "faults", label: "Faults · active", test: (r) => (r.faults?.length ?? 0) > 0, color: "var(--serious)" },
-  { key: "test", label: "Test data", test: (r) => r.test_data, color: "#7f8fd6" },
+  { key: "test", label: "Test data", test: (r) => r.test_data, color: "#5a6cc4" },
 ];
 
 interface Seg {
