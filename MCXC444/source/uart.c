@@ -56,7 +56,6 @@ void initUART2(void)
 	NVIC_EnableIRQ(UART2_FLEXIO_IRQn);
 }
 
-// No need to be volatile by design
 static char send_buffer[MAX_MSG_LEN];
 
 /* CRC-16/CCITT-FALSE: polynomial 0x1021, initial value 0xFFFF,
