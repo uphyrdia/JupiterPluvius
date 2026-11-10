@@ -37,7 +37,7 @@
  * it is dark (same rule as LIGHT_STATE_THRESHOLD on the ESP32). */
 #define LIGHT_ADC_THRESHOLD				1000
 /* Higher ADC values mean drier soil. */
-#define SOIL_MOISTURE_ADC_THRESHOLD    	1600U
+#define SOIL_MOISTURE_ADC_THRESHOLD    	1200U
 
 #define SOIL_MOISTURE_SAMPLING_PERIOD	 500U
 #define SEND_INTERVAL_MS				1000U

@@ -26,8 +26,8 @@
 #include "supabase.h"
 #include <time.h>
 
-constexpr char WIFI_SSID[] = "utakata";
-constexpr char WIFI_PASSWORD[] = "phlorova";
+constexpr char WIFI_SSID[] = "OnePlus Nord CE 3 Lite 5G";
+constexpr char WIFI_PASSWORD[] = "n4jqtz6y";
 constexpr char SUPABASE_URL[] = "https://swdnnvrihfaetgvsxaht.supabase.co";
 constexpr char SUPABASE_PUBLISHABLE_KEY[] = "sb_publishable_sJjt6SXXxUpcYvcTUe7UCA_fNBiWSQ9";
 constexpr char DEVICE_EMAIL[] = "uphyrdia@gmail.com";

@@ -22,7 +22,7 @@ DEEPSEEK_MODEL = "deepseek-flash"                  # DeepSeek-V4.1-Flash
 AI_COOLDOWN_S = 15         # at most one AI call per 15 s, so button mashing can't drain the balance
 # The MCXC444's watering rule, described to the AI. Keep in sync with MCXC444/source/main.c
 # (SOIL_MOISTURE_ADC_THRESHOLD, pumpTask and PUMP_COOLDOWN_MS).
-PUMP_THRESHOLD_RAW = 1600  # the pump runs when soil_raw is above this (drier)
+PUMP_THRESHOLD_RAW = 1200  # the pump runs when soil_raw is above this (drier)
 PUMP_RUN_S = 3             # seconds per watering
 PUMP_EXTRA_S = 1           # added when it's hot or the air is dry:
 PUMP_HOT_C = 30            #   temperature >= this (°C)

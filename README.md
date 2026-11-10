@@ -18,7 +18,7 @@ MCXC444 (FreeRTOS) <--UART 9600--> ESP32-S2 --HTTPS--> Supabase <-- FastAPI + Re
 | **MCXC444** | Soil moisture (ADC0, PTB2), reservoir level (CMP0 on PTC6 against a 1.65 V DAC) | Runs the pump (PTE30), buzzer (PTA13) and grow LED (PTA5) |
 | **ESP32-S2** | Temperature and humidity (DHT11, GPIO7), light (LDR, GPIO8) | Relays readings between the MCU and Supabase every 5 s |
 
-- **Watering:** when the soil ADC reads above 1600 (dry), the pump runs for 3 s, or 4 s if it's ≥ 30 °C or ≤ 45 %
+- **Watering:** when the soil ADC reads above 1200 (dry), the pump runs for 3 s, or 4 s if it's ≥ 30 °C or ≤ 45 %
   humidity, then waits 30 s before it can water again.
 - **Reservoir:** the buzzer sounds while the water level is below the comparator's threshold.
 - **Grow LED:** on while the light ADC reads 1000 or more (dark).
