@@ -1,6 +1,6 @@
 # CG2271 Real Time Operating Systems: Final Report
 
-**2025/26 Semester 2 · Smart Greenhouse RTOS Project (JupiterPluvius auto-watering plant)**
+**2025/26 Semester 2 · Smart Greenhouse RTOS Project**
 
 **Group B0X_YY**
 
@@ -43,27 +43,80 @@ The plant is looked after by two microcontrollers and a cloud dashboard (Figure 
 
 **Figure 1.** System architecture. The boards exchange UART frames in both directions; only the ESP32-S2 talks to the cloud.
 
-**Table 1.** Hardware interfaces
+## 2 Hardware architecture
 
-| Signal | Pin | Peripheral and use |
-|---|---|---|
-| **MCXC444** | | |
-| Soil moisture probe | PTB2 | ADC0 channel 12: 12-bit, calibrated at start-up, polled by `soil` |
-| Reservoir level probe | PTC6 | CMP0 input 0 against its 6-bit DAC at 1.65 V, with hysteresis; interrupt on both edges |
-| Pump driver | PTE30 | GPIO output, driven by `pump` |
-| Servo valve (fallback) | PTD3 | TPM0 channel 3: 50 Hz PWM, 1 ms pulse = closed, 2 ms = open; driven by `servo` |
-| Buzzer | PTA13 | GPIO output, driven by `water` |
-| Grow LED | PTA5 | GPIO output, driven by `recv` |
-| UART link | PTE22 (TX), PTE23 (RX) | UART2, 9600 baud 8N1, interrupt-driven |
-| Debug console | PTA2 (TX), PTA1 (RX) | LPUART0, 115200 baud, used by `PRINTF` |
-| **ESP32-S2** | | |
-| DHT11 | GPIO7 | Temperature and humidity, read every 3 s |
-| LDR | GPIO8 | 12-bit ADC (11 dB attenuation), median of 9 samples, read every 1 s |
-| UART link | GPIO17 (TX), GPIO16 (RX) | UART1 (`Serial1`), 9600 baud 8N1 |
+### 2.1 Pin table
 
-## 2 Software architecture
+Every sensor and actuator connects to one pin of one board (Table 1). The two boards are joined by three wires: the two UART lines, crossed, and a common ground. Both boards use 3.3 V logic, so the UART lines need no level shifting.
 
-### 2.1 Task structure
+<!-- TODO: insert the photo of the whole system here, e.g. ![Photo of the assembled system](img/system-photo.jpg) -->
+
+**Table 1.** Pin connections
+
+| Device | Board pin | Direction | Peripheral |
+|---|---|---|---|
+| **MCXC444** | | | |
+| Soil moisture probe (analog output) | PTB2 | Input | ADC0 channel 12 |
+| Water-level probe (analog output) | PTC6 | Input | CMP0 input 0 |
+| Water pump (through its driver) | PTE30 | Output | GPIO, active high |
+| Servo valve (signal wire) | PTD3 | Output | TPM0 channel 3 (PWM) |
+| Buzzer | PTA13 | Output | GPIO, active high |
+| Grow LED | PTA5 | Output | GPIO, active high |
+| UART to the ESP32-S2 | PTE22 (TX) → GPIO16<br>PTE23 (RX) ← GPIO17 | Output<br>Input | UART2 |
+| Debug console (USB) | PTA2 (TX), PTA1 (RX) | Both | LPUART0, 115200 baud, used by `PRINTF` |
+| **ESP32-S2** | | | |
+| DHT11 (data pin) | GPIO7 | Both (single wire) | GPIO, timed by the DHTesp library |
+| LDR module (analog output) | GPIO8 | Input | ADC, 12-bit |
+| UART to the MCXC444 | GPIO17 (TX) → PTE23<br>GPIO16 (RX) ← PTE22 | Output<br>Input | UART1 (`Serial1`) |
+
+### 2.2 Sensor / actuator programming
+
+All MCXC444 devices are programmed bare-metal, by writing the peripheral registers directly; the NXP SDK is used only for start-up, clocks and the debug console. Each driver enables the clock gate of its port and peripheral, selects the pin function in the port's `PCR` register and then configures the peripheral. On the ESP32-S2 the two sensors are read through the Arduino core and one library. This section covers how each device is set up and read or driven; which task uses it, and when, is in Section 3.
+
+#### Soil moisture probe: ADC0, polled (`adc.c`)
+
+- **Set-up (`initADC0()`).** PTB2 is left in its analog function (`MUX` = 0). ADC0 is set to 12-bit single-ended conversion with a long sample time, clocked at 1.5 MHz (the 24 MHz bus clock divided by 2 and then by 8), software-triggered, with the alternate reference pair. It is then calibrated once, with 32-sample averaging, and the plus-side and minus-side gain registers are computed from the calibration results as the reference manual prescribes. Averaging and continuous conversion are switched off afterwards, so each trigger gives exactly one conversion.
+- **Reading (`poll_soil_adc()`).** Writing the channel number to `SC1A` starts a conversion; the function waits for the conversion-complete flag (`COCO`) and returns the result register:
+
+```c
+ADC0->SC1[0] = ADC_SC1_ADCH(SOIL_ADC_CHANNEL);      // select channel 12 and start
+while (!(ADC0->SC1[0] & ADC_SC1_COCO_MASK)) {}      // wait for the conversion
+return ADC0->R[0];                                  // 0..4095, higher = drier
+```
+
+The ADC interrupt is not used: a conversion finishes in tens of microseconds, far less than a context switch would save, and the soil only needs sampling twice a second.
+
+#### Water-level probe: CMP0, interrupt-driven (`cmp.c`)
+
+The level only matters as "enough" or "low", so the probe is not converted to a number. The on-chip analog comparator compares it with a fixed threshold and raises an interrupt when the result changes.
+
+- **Set-up (`initCMP0()`).** PTC6 is the comparator's plus input (IN0). The minus input is the comparator's own 6-bit DAC, set to half of the 3.3 V supply: (3.3 V / 64) × (31 + 1) = 1.65 V. The comparator runs in high-speed mode with the largest hysteresis setting (level 3), so a level hovering at the threshold does not make the output chatter. After a 50 µs settling delay the driver clears any edge flags raised during set-up, reads the output once to initialise `reservoir_level_ok`, and enables interrupts on both rising and falling edges at NVIC priority 2.
+- **Reading (`CMP0_IRQHandler`).** The handler clears the edge flags, copies the comparator output (`COUT`: 1 = level OK, 0 = low) into `reservoir_level_ok` and wakes the water task (Table 3).
+
+#### Pump, buzzer and grow LED: GPIO outputs (`gpio.c`)
+
+`initGPIO()` clears each output bit first and only then makes the pin a GPIO (`MUX` = 1) output in `PDDR`, so all three devices start switched off. Each has a pair of one-line functions (`onPump()` / `offPump()`, `onBuzzer()` / `offBuzzer()`, `onLED()` / `offLED()`) that write a single bit to the port's set register `PSOR` or clear register `PCOR`. These registers change only the written bit, which is why tasks sharing a port need no lock (Section 3.3).
+
+#### Servo valve: TPM0 PWM (`pwm.c`)
+
+A hobby servo expects a pulse every 20 ms whose width sets the angle: about 1 ms for one end and 2 ms for the other.
+
+- **Set-up (`setTPMClock()`, `initPWM()`).** The timer is clocked from the 8 MHz internal reference clock (MCGIRCLK), divided by 128 to 62.5 kHz, so one count is 16 µs. TPM0 runs in centre-aligned (up-down) PWM mode with `MOD` = 625: the period is 2 × 625 counts = 20 ms, i.e. 50 Hz. Channel 3 is set to high-true pulses and PTD3 to its TPM function (`MUX` = 4).
+- **Driving (`setServoPulse()`).** In centre-aligned mode the pulse lasts 2 × `CnV` counts. The function limits its argument to 31–62 and writes it to `CnV`: `SERVO_MIN` = 31 gives 0.99 ms (valve closed) and `SERVO_MAX` = 62 gives 1.98 ms (valve open). The hardware keeps generating the pulses on its own, so the servo holds its position with no interrupt and no CPU time.
+
+#### DHT11: single-wire digital sensor (`sensor.cpp`)
+
+The DHT11 sends 40 bits on one wire with microsecond timing, which the DHTesp library handles. `initSensors()` calls `dht.setup(7, DHTesp::DHT11)`, and `readDHT11()` calls `dht.getTempAndHumidity()` every 3 s, slower than the sensor's minimum interval. A reading is accepted only if both values are finite and in range (−40 to 125 °C, 0 to 100 %); otherwise the sensor is marked unavailable until the next good reading and the library's status text is logged.
+
+#### LDR: ESP32-S2 ADC (`sensor.cpp`)
+
+`initSensors()` sets the ADC to 12 bits and GPIO8 to 11 dB attenuation, the widest input range. `readLightSensor()` takes 9 samples 2 ms apart with `analogRead()`, sorts them and keeps the median, which removes single-sample spikes without the lag of averaging. A lower value means brighter light.
+
+Each ESP32-S2 reading is stored with the `millis()` time it was taken, so the rest of the sketch can tell a fresh value from a stale one (Section 4.3).
+
+## 3 Software architecture
+
+### 3.1 Task structure
 
 The MCXC444 firmware runs FreeRTOS with preemptive scheduling and time slicing, a 200 Hz tick (5 ms) and five priority levels (0–4). `main()` initialises the clocks and pins, creates every queue, semaphore and mutex, initialises GPIO, ADC0, CMP0 and UART2, creates the six application tasks in Table 2 and starts the scheduler. All RTOS objects are allocated once, from the 10 KB `heap_4` heap, before the scheduler starts; nothing is created or deleted at run time.
 
@@ -76,7 +129,7 @@ The MCXC444 firmware runs FreeRTOS with preemptive scheduling and time slicing, 
 | **`soil`**<br>`soil_moisture_sensor_task` | 3 | Every 500 ms | Samples ADC0 into `moisture` and logs it. While the reading is above 1200 (dry) it gives `pump_sema`; once the soil has been dry for 60 s it also gives `servo_sema`. |
 | **`water`**<br>`water_level_sensor_task` | 3 | Blocks on `reservoir_level_sema` | Sets the buzzer from `reservoir_level_ok` (on while the reservoir is low) at start-up and after every comparator edge; logs the level. |
 | **`pump`**<br>`pumpTask` | 2 | Blocks on `pump_sema` | Re-checks `moisture`, runs the pump for 3 s (4 s at ≥ 30 °C or ≤ 45 % humidity), then waits 30 s before it can water again. |
-| **`servo`**<br>`servoTask` | 2 | Blocks on `servo_sema` | Fallback for a pump that is down. Sets up the TPM0 PWM with the valve closed when it starts. Then re-checks `moisture`, opens the valve for 5 s (6 s at ≥ 30 °C or ≤ 45 % humidity), closes it and waits 30 s. |
+| **`servo`**<br>`servoTask` | 2 | Blocks on `servo_sema` | Fallback for a pump that is down. Starts the PWM (Section 2.2) with the valve closed. Then re-checks `moisture`, opens the valve for 5 s (6 s at ≥ 30 °C or ≤ 45 % humidity), closes it and waits 30 s. |
 
 FreeRTOS adds its idle task (priority 0) and timer service task (priority 4); the firmware uses no software timers.
 
@@ -86,7 +139,7 @@ FreeRTOS adds its idle task (priority 0) and timer service task (priority 4); th
 
 | ISR | Triggered by | Work done | Hands over to |
 |---|---|---|---|
-| `UART2_FLEXIO_IRQHandler` | Byte received (RDRF), receiver overrun (OR), or transmit register empty (TDRE, enabled only while a frame is being sent) | RX: adds the byte to the frame being assembled (Section 3.2). TX: writes the next byte of `send_buffer`; after the last one, disables the TDRE interrupt. | Frame received: `queue` → `recv`<br>Frame sent: `uart_sema` → `send` |
+| `UART2_FLEXIO_IRQHandler` | Byte received (RDRF), receiver overrun (OR), or transmit register empty (TDRE, enabled only while a frame is being sent) | RX: adds the byte to the frame being assembled (Section 4.2). TX: writes the next byte of `send_buffer`; after the last one, disables the TDRE interrupt. | Frame received: `queue` → `recv`<br>Frame sent: `uart_sema` → `send` |
 | `CMP0_IRQHandler` | Comparator output change: the reservoir level crosses the threshold | Clears the edge flags and stores the comparator output in `reservoir_level_ok`. | `reservoir_level_sema` → `water` |
 
 Both handlers do a small, fixed amount of work, never block, call only the `…FromISR` FreeRTOS functions and end with `portYIELD_FROM_ISR()`, so a task they wake runs as soon as the interrupt returns. The servo's PWM is generated entirely by the TPM0 hardware and needs no interrupt.
@@ -105,7 +158,7 @@ The ESP32-S2 runs one Arduino `loop()` and creates no tasks of its own. Each job
 | Send an environment frame to the MCXC444, only while both readings are fresh | 5 s | `sendToMCXC444()` |
 | Upload one reading to Supabase over HTTPS | 5 s | `sendReadingsToSupabase()` |
 
-### 2.2 Coordination & synchronisation
+### 3.2 Coordination & synchronisation
 
 Interrupt handlers only capture an event and hand the rest to a task (deferred interrupt processing). Tasks never poll for events: each waits on exactly one RTOS object, or on `vTaskDelay()` if it is periodic. Figure 2 shows every object with its producer and consumer; Table 5 summarises them.
 
@@ -118,11 +171,11 @@ Interrupt handlers only capture an event and hand the rest to a task (deferred i
 | Object | Type | Given / sent by | Taken / received by | Purpose |
 |---|---|---|---|---|
 | `queue` | Queue, 5 × 256-byte `TMessage` | UART2 ISR, when `\n` completes a frame | `recv` | Moves each frame out of the ISR by copy, so validation and parsing run in task context. When 5 frames are already waiting, the ISR drops the new one rather than block. |
-| `uart_sema` | Binary semaphore, given once at start-up | UART2 ISR, after the last byte | `send`, in `UART2_Send()` | “Transmitter free” token: one frame in flight at a time (Figure 5, Section 2.3). |
+| `uart_sema` | Binary semaphore, given once at start-up | UART2 ISR, after the last byte | `send`, in `UART2_Send()` | “Transmitter free” token: one frame in flight at a time (Figure 5, Section 3.3). |
 | `reservoir_level_sema` | Binary semaphore | CMP0 ISR, on each edge | `water` | Wakes the water task to update the buzzer when the level crosses the threshold. |
 | `pump_sema` | Binary semaphore | `soil`, on each sample above 1200 | `pump` | Requests watering. Requests made while the pump is busy collapse into one (Figure 3). |
 | `servo_sema` | Binary semaphore | `soil`, on each sample above 1200 once the soil has been dry for 60 s | `servo` | Requests fallback watering through the servo valve (Figure 4). |
-| `print_mutex` | Mutex | `recv`, `soil`, `water` | The same tasks | Serialises console output (Section 2.3). |
+| `print_mutex` | Mutex | `recv`, `soil`, `water` | The same tasks | Serialises console output (Section 3.3). |
 
 #### Watering
 
@@ -152,9 +205,9 @@ The servo task follows the same pattern as the pump task: it takes `servo_sema`,
 
 #### Between the boards
 
-The boards are loosely coupled: neither waits for the other. Each sends on its own timer (status every 1 s, environment every 5 s) and the receiver keeps the latest valid values. The ESP32-S2 treats the MCXC444’s status as stale after 15 s without a valid frame and then uploads it as missing (Section 4.2); the MCXC444 keeps using the last climate values it received.
+The boards are loosely coupled: neither waits for the other. Each sends on its own timer (status every 1 s, environment every 5 s) and the receiver keeps the latest valid values. The ESP32-S2 treats the MCXC444’s status as stale after 15 s without a valid frame and then uploads it as missing (Section 5.2); the MCXC444 keeps using the last climate values it received.
 
-### 2.3 Resource protection
+### 3.3 Resource protection
 
 Each shared resource has a single owner or an explicit protection mechanism (Table 6).
 
@@ -187,9 +240,11 @@ Each variable has a single writer, is at most 32 bits wide and is aligned, so on
 
 On the ESP32-S2, all application code runs in `loop()`, so its buffers and the MCXC444 status structure have a single user and need no locking.
 
-## 3 Communication protocol
+## 4 Communication protocol
 
-### 3.1 UART configuration
+### 4.1 UART configuration
+
+The wiring between the boards is in Table 1; Table 8 lists how each side is configured.
 
 **Table 8.** UART settings
 
@@ -197,7 +252,6 @@ On the ESP32-S2, all application code runs in `loop()`, so its buffers and the M
 |---|---|---|
 | Peripheral | UART2 | UART1 (`Serial1`) |
 | Pins | TX PTE22, RX PTE23 (pin mux ALT4) | TX GPIO17, RX GPIO16 |
-| Wiring | PTE22 (TX) → GPIO16 (RX); common ground | GPIO17 (TX) → PTE23 (RX); 3.3 V logic on both boards |
 | Baud rate | 9600 (divisor 156 from the 24 MHz bus clock: 9615 baud, +0.16 %) | 9600 |
 | Character format | 8 data bits, no parity, 1 stop bit (8N1), no flow control | 8N1, no flow control |
 | Receiving | Interrupt per byte (RDRF) plus an overrun interrupt; frames are assembled in the ISR | Driver receive buffer, drained by `loop()` |
@@ -207,7 +261,7 @@ On the ESP32-S2, all application code runs in `loop()`, so its buffers and the M
 
 The divisor is SBR = round(f_bus / (16 × 9600)) = round(24 000 000 / 153 600) = 156, which gives 24 MHz / (16 × 156) = 9615 baud. The +0.16 % error is far inside the few per cent a UART tolerates. At 10 bits per character the link carries 960 bytes per second in each direction.
 
-### 3.2 Packet description
+### 4.2 Packet description
 
 Both directions use the same ASCII frame (Figure 6): it starts with `@`, carries comma-separated `KEY:value` pairs, and ends with a CRC-16 in hexadecimal and a line feed.
 
@@ -262,15 +316,15 @@ A frame that fails any check is dropped; the ESP32-S2 also logs it. There is no 
 
 **Figure 7.** Receiving a frame: byte-by-byte assembly (left) and validation of the complete frame (right).
 
-### 3.3 Additional features
+### 4.3 Additional features
 
 - **Integrity and resynchronisation.** Every frame carries a CRC-16 and is checked for exact framing; a corrupted or partial frame is dropped, never acted on, and the next `@` re-synchronises the receiver.
 - **Non-blocking, interrupt-driven UART on the MCXC444.** Neither sending nor receiving busy-waits: the ISR moves one byte per interrupt, and decoding runs in a task.
 - **Data freshness.** The ESP32-S2 sends an environment frame only while its DHT11 and LDR readings are at most 10 s old, so the MCXC444 never acts on stale climate data. In the other direction it treats the MCXC444's status as missing after 15 s without a valid frame.
 
-## 4 Online function used
+## 5 Online function used
 
-### 4.1 Description of function used
+### 5.1 Description of function used
 
 The project uses three online services (Table 12). Only the ESP32-S2 is connected to the internet; the MCXC444 reaches the cloud through it.
 
@@ -286,7 +340,7 @@ The ESP32-S2 also uses public **NTP** servers (`pool.ntp.org`, `time.google.com`
 
 Data flows one way: board → Supabase → dashboard. The dashboard is read-only and sends nothing back to the boards, so watering keeps working when Wi-Fi or any online service is down; only the monitoring stops.
 
-### 4.2 Data sent and received by ESP32
+### 5.2 Data sent and received by ESP32
 
 The ESP32-S2 makes two kinds of HTTPS request to Supabase (Table 13), both as JSON over TLS with the server certificate verified against root certificates stored in the sketch. It makes no request until Wi-Fi is connected and NTP has set the clock.
 
@@ -322,14 +376,14 @@ Supabase adds the row's `id` and its `created_at` timestamp itself. An upload lo
 
 The ESP32-S2 receives no commands or settings from the cloud: apart from the two replies above, the only online data it takes in is the NTP time.
 
-## 5 Special features
+## 6 Special features
 
-- **Redundant watering.** The firmware infers a failed pump from soil that stays dry for 60 s and then waters through a servo valve as well, so one unreliable actuator does not stop the watering (Section 2.2).
+- **Redundant watering.** The firmware infers a failed pump from soil that stays dry for 60 s and then waters through a servo valve as well, so one unreliable actuator does not stop the watering (Section 3.2).
 - **Climate-aware watering across both boards.** The MCXC444 waters 1 s longer when the ESP32-S2 reports hot or dry air, and switches the grow LED from the ESP32-S2's light reading; both boards use the same threshold (1000) for dark.
 - **Watering limit.** Each watering is a fixed 3–6 s followed by a 30 s cooldown, and the soil is re-checked before every run, so the plant is not flooded while the water is still soaking in.
 - **Hardware reservoir alarm.** The on-chip comparator, with hysteresis, interrupts only when the level crosses the threshold, so the buzzer reacts at once without any polling.
-- **Fully event-driven firmware.** No task polls for an event and no UART byte is busy-waited for; binary semaphores given from interrupts and from the soil task do all the signalling (Section 2).
-- **Robust link.** CRC-16 frames that re-synchronise on their own between the boards (Section 3), and fault codes instead of stale values in the cloud (Section 4.2).
-- **Secure cloud access.** Verified HTTPS, separate device and dashboard accounts, and row-level security that limits each account to the one operation it needs (Section 4).
-- **Remote dashboard with an AI check-up.** Live readings, trends and a log from anywhere, plus an on-demand AI summary of the plant's condition with advice (Section 4.1).
+- **Fully event-driven firmware.** No task polls for an event and no UART byte is busy-waited for; binary semaphores given from interrupts and from the soil task do all the signalling (Section 3).
+- **Robust link.** CRC-16 frames that re-synchronise on their own between the boards (Section 4), and fault codes instead of stale values in the cloud (Section 5.2).
+- **Secure cloud access.** Verified HTTPS, separate device and dashboard accounts, and row-level security that limits each account to the one operation it needs (Section 5).
+- **Remote dashboard with an AI check-up.** Live readings, trends and a log from anywhere, plus an on-demand AI summary of the plant's condition with advice (Section 5.1).
 
