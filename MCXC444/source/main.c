@@ -30,6 +30,7 @@
 #include "adc.h"
 #include "cmp.h"
 #include "uart.h"
+#include "pwm.h"
 
 #define QLEN	5
 
@@ -45,6 +46,7 @@
 
 QueueHandle_t queue;
 SemaphoreHandle_t pump_sema;
+SemaphoreHandle_t servo_sema;
 SemaphoreHandle_t reservoir_level_sema;
 SemaphoreHandle_t print_mutex;
 SemaphoreHandle_t uart_sema;
@@ -97,6 +99,29 @@ static void recvTask(void *p)
 	}
 }
 
+/* Same rule as pumpTask: the servo opens (SERVO_MAX) to water and closes (SERVO_MIN) after. */
+static void servoTask(void *p)
+{
+	setTPMClock();
+	initPWM();
+	setServoPulse(SERVO_MIN);
+	startPWM();
+	for (;;) {
+		while (xSemaphoreTake(servo_sema, portMAX_DELAY) != pdTRUE) {}
+		if (moisture <= SOIL_MOISTURE_ADC_THRESHOLD) continue;
+
+		unsigned int duration_ms = 5000U;
+		if (temperature >= 30.0f || humidity <= 45.0f)
+			duration_ms += 1000U;
+
+		setServoPulse(SERVO_MAX);
+		vTaskDelay(pdMS_TO_TICKS(duration_ms));
+		setServoPulse(SERVO_MIN);
+
+		vTaskDelay(pdMS_TO_TICKS(PUMP_COOLDOWN_MS));
+	}
+}
+
 static void sendTask(void *p)
 {
 	static TMessage msg;
@@ -132,8 +157,10 @@ static void soil_moisture_sensor_task(void *p)
 	for (;;) {
 		moisture = poll_soil_adc();
 
-		if (moisture > SOIL_MOISTURE_ADC_THRESHOLD)
+		if (moisture > SOIL_MOISTURE_ADC_THRESHOLD) {
 			xSemaphoreGive(pump_sema);
+			xSemaphoreGive(servo_sema);
+		}
 
 		if (xSemaphoreTake(print_mutex, portMAX_DELAY) == pdTRUE) {
 			PRINTF("Soil moisture ADC: %u\r\n", moisture); // Raw 0..4095
@@ -182,6 +209,7 @@ int main(void)
 	queue = xQueueCreate(QLEN, sizeof(TMessage));
 
 	pump_sema = xSemaphoreCreateBinary(); // semaphore is initialized to 0
+	servo_sema = xSemaphoreCreateBinary(); // same signal as pump_sema, for servoTask
 	reservoir_level_sema = xSemaphoreCreateBinary(); // given from ISR
 	uart_sema = xSemaphoreCreateBinary(); // given from ISR, signals transmitter is free
 
@@ -201,6 +229,7 @@ int main(void)
 	xTaskCreate(soil_moisture_sensor_task, "soil", configMINIMAL_STACK_SIZE+100, NULL, 3, NULL);
 	xTaskCreate(water_level_sensor_task, "water", configMINIMAL_STACK_SIZE+100, NULL, 3, NULL);
 	xTaskCreate(pumpTask, "pump", configMINIMAL_STACK_SIZE+100, NULL, 2, NULL);
+	xTaskCreate(servoTask, "servo", configMINIMAL_STACK_SIZE+100, NULL, 2, NULL);
 
     vTaskStartScheduler();
 

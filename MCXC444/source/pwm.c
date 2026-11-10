@@ -1,7 +1,4 @@
-/*
- * Since a water pump is used instead of a servo,
- * the pwm component is no longer used.
- */
+/* 50 Hz PWM on TPM0 channel 3 (PTD3) for the watering servo, driven by servoTask in main.c. */
 
 #include <stdint.h>
 
