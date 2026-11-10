@@ -14,7 +14,7 @@
 
 ## Problem statement
 
-**User story:** A busy student or professional needs a system that detects dry soil, waters a potted plant automatically and/or remotely.
+**User story:** A busy student or professional needs a system that detects dry soil, waters a potted plant automatically and allows the user to monitor remotely.
 
 The project automatically irrigates a potted plant according to soil moisture while preventing watering when reservoir water is insufficient and enforcing watering limits. It provides remote environmental monitoring and AI-assisted watering-profile recommendations.
 
@@ -152,7 +152,7 @@ The servo task follows the same pattern as the pump task: it takes `servo_sema`,
 
 #### Between the boards
 
-The boards are loosely coupled: neither waits for the other. Each sends on its own timer (status every 1 s, environment every 5 s) and the receiver keeps the latest valid values. The ESP32-S2 treats the MCXC444’s status as stale after 15 s without a valid frame and then uploads it as missing (Section 3.3); the MCXC444 keeps using the last climate values it received.
+The boards are loosely coupled: neither waits for the other. Each sends on its own timer (status every 1 s, environment every 5 s) and the receiver keeps the latest valid values. The ESP32-S2 treats the MCXC444’s status as stale after 15 s without a valid frame and then uploads it as missing (Section 4.2); the MCXC444 keeps using the last climate values it received.
 
 ### 2.3 Resource protection
 
@@ -266,9 +266,70 @@ A frame that fails any check is dropped; the ESP32-S2 also logs it. There is no 
 
 - **Integrity and resynchronisation.** Every frame carries a CRC-16 and is checked for exact framing; a corrupted or partial frame is dropped, never acted on, and the next `@` re-synchronises the receiver.
 - **Non-blocking, interrupt-driven UART on the MCXC444.** Neither sending nor receiving busy-waits: the ISR moves one byte per interrupt, and decoding runs in a task.
-- **Data freshness and fault codes.** The ESP32-S2 forwards climate data only while it is at most 10 s old, and treats MCXC444 status older than 15 s as missing. Each upload sends missing values as null and lists the cause: `DHT11_UNAVAILABLE`, `LIGHT_SENSOR_UNAVAILABLE` or `MCXC444_UNAVAILABLE`.
-- **Control across both boards.** The watering time depends on the ESP32-S2’s temperature and humidity, and the grow LED on its light reading; both boards use the same threshold (1000) for dark.
-- **Redundant watering.** If the soil stays dry for 60 s, a servo valve on a hardware PWM channel waters the plant as well, so a failed pump does not stop the watering.
-- **Hardware reservoir alarm.** The comparator, with hysteresis, interrupts only when the level crosses the threshold, so the buzzer reacts at once without polling.
-- **Secure cloud upload.** HTTPS with certificate verification against bundled root CAs, NTP time before TLS, and a cached sign-in token for the device account. Supabase row-level security lets the device only insert its own rows and the dashboard backend only read.
-- **Web dashboard and AI check-up.** Live readings, trends over 1 h or 24 h (evenly thinned to about 1,000 points), a log of the latest readings, and an on-demand DeepSeek check-up whose reply is validated and limited to one request per 15 s.
+- **Data freshness.** The ESP32-S2 sends an environment frame only while its DHT11 and LDR readings are at most 10 s old, so the MCXC444 never acts on stale climate data. In the other direction it treats the MCXC444's status as missing after 15 s without a valid frame.
+
+## 4 Online function used
+
+### 4.1 Description of function used
+
+The project uses three online services (Table 12). Only the ESP32-S2 is connected to the internet; the MCXC444 reaches the cloud through it.
+
+**Table 12.** Online services
+
+| Service | Role | How it is used |
+|---|---|---|
+| **Supabase** (hosted PostgreSQL with a REST API and user accounts) | Stores every reading | The ESP32-S2 signs in as a device account and inserts one row into the `readings` table every 5 s. Row-level security lets the device account only insert its own rows and the dashboard's account only read. |
+| **Dashboard on Render** (FastAPI backend serving a React app) | Remote monitoring | The backend reads `readings` from Supabase and the browser polls it every 5 s. The pages show the live readings, trends over 1 h or 24 h (evenly thinned to about 1,000 points) and a log of the latest 20 readings. Soil moisture is converted from the raw ADC value to a percentage here. |
+| **DeepSeek API** (large language model) | AI check-up | On request, the backend sends the readings of the chosen window as CSV, with a description of the device's watering rule and some precomputed statistics. The reply is a status (good, attention or urgent), a headline, summary points and advice. The backend validates its structure before showing it and allows one request per 15 s. |
+
+The ESP32-S2 also uses public **NTP** servers (`pool.ntp.org`, `time.google.com`) to set its clock, which it needs to verify HTTPS certificates.
+
+Data flows one way: board → Supabase → dashboard. The dashboard is read-only and sends nothing back to the boards, so watering keeps working when Wi-Fi or any online service is down; only the monitoring stops.
+
+### 4.2 Data sent and received by ESP32
+
+The ESP32-S2 makes two kinds of HTTPS request to Supabase (Table 13), both as JSON over TLS with the server certificate verified against root certificates stored in the sketch. It makes no request until Wi-Fi is connected and NTP has set the clock.
+
+**Table 13.** ESP32-S2 requests
+
+| Request | When | Data sent | Data received |
+|---|---|---|---|
+| **Sign-in**<br>`POST /auth/v1/token?grant_type=password` | At the first upload, and again 60 s before the token expires or after a 401 reply | The device account's `email` and `password`, and the project's publishable API key in a header | HTTP 200 with `access_token` and `expires_in`. The token is kept in memory and reused for later uploads. |
+| **Insert a reading**<br>`POST /rest/v1/readings` | Every 5 s | One reading (Table 14), with the API key and the access token in headers | HTTP 201 with an empty body (the request asks for `return=minimal`). Any other status is logged with the reply; nothing is retried, and the next upload sends a fresh sample. |
+
+**Table 14.** Fields of an uploaded reading
+
+| Field | Type | Source | Meaning |
+|---|---|---|---|
+| `device_id` | text | ESP32-S2 configuration | Identifies the board |
+| `temperature` | number or null | DHT11 | Air temperature in °C |
+| `humidity` | number or null | DHT11 | Relative humidity in % |
+| `light_state` | boolean or null | LDR | `true` = bright (raw reading below 1000) |
+| `soil_adc_raw` | integer or null | `SOIL` from the MCXC444 | Raw soil reading, 0–4095, higher is drier |
+| `reservoir_state` | boolean or null | `WATER` from the MCXC444 | `true` = reservoir level OK |
+| `led_state` | boolean or null | `LED` from the MCXC444 | `true` = grow LED on |
+| `faults` | list of text | ESP32-S2 | Why a value is missing (see below); empty when all is well |
+| `test_data` | boolean | ESP32-S2 | Always `false` for real readings |
+
+Supabase adds the row's `id` and its `created_at` timestamp itself. An upload looks like this:
+
+```json
+{"device_id":"<device id>","temperature":29.4,"humidity":61.0,"light_state":true,
+ "soil_adc_raw":2048,"reservoir_state":true,"led_state":false,"faults":[],"test_data":false}
+```
+
+**Missing data and fault codes.** A reading is uploaded even when part of it is unavailable. A DHT11 or LDR reading older than 10 s, or MCXC444 status older than 15 s, is sent as `null`, and `faults` names the cause: `DHT11_UNAVAILABLE`, `LIGHT_SENSOR_UNAVAILABLE` or `MCXC444_UNAVAILABLE`. The dashboard shows the gap instead of a stale value.
+
+The ESP32-S2 receives no commands or settings from the cloud: apart from the two replies above, the only online data it takes in is the NTP time.
+
+## 5 Special features
+
+- **Redundant watering.** The firmware infers a failed pump from soil that stays dry for 60 s and then waters through a servo valve as well, so one unreliable actuator does not stop the watering (Section 2.2).
+- **Climate-aware watering across both boards.** The MCXC444 waters 1 s longer when the ESP32-S2 reports hot or dry air, and switches the grow LED from the ESP32-S2's light reading; both boards use the same threshold (1000) for dark.
+- **Watering limit.** Each watering is a fixed 3–6 s followed by a 30 s cooldown, and the soil is re-checked before every run, so the plant is not flooded while the water is still soaking in.
+- **Hardware reservoir alarm.** The on-chip comparator, with hysteresis, interrupts only when the level crosses the threshold, so the buzzer reacts at once without any polling.
+- **Fully event-driven firmware.** No task polls for an event and no UART byte is busy-waited for; binary semaphores given from interrupts and from the soil task do all the signalling (Section 2).
+- **Robust link.** CRC-16 frames that re-synchronise on their own between the boards (Section 3), and fault codes instead of stale values in the cloud (Section 4.2).
+- **Secure cloud access.** Verified HTTPS, separate device and dashboard accounts, and row-level security that limits each account to the one operation it needs (Section 4).
+- **Remote dashboard with an AI check-up.** Live readings, trends and a log from anywhere, plus an on-demand AI summary of the plant's condition with advice (Section 4.1).
+
