@@ -1,8 +1,37 @@
-# Smart Greenhouse RTOS Project
+# CG2271 Real Time Operating Systems: Final Report
 
-**Software architecture and communication protocol**
+**2025/26 Semester 2 · Smart Greenhouse RTOS Project (JupiterPluvius auto-watering plant)**
 
-CG2271 · JupiterPluvius auto-watering plant · November 2026
+**Group B0X_YY**
+
+| Name | Matric number |
+|---|---|
+| Chen Xingtong | A0300595H |
+| Nandhimandalam Madhavakrishna Nandhana | A0287034A |
+| Wang Jiawei | A0308058A |
+| Louis Agara Perin | A0306755Y |
+| Hua Zhenting | A0283162H |
+
+## Problem statement
+
+**User story:** A busy student or professional needs a system that detects dry soil, waters a potted plant automatically and/or remotely.
+
+The project automatically irrigates a potted plant according to soil moisture while preventing watering when reservoir water is insufficient and enforcing watering limits. It provides remote environmental monitoring and AI-assisted watering-profile recommendations.
+
+## Sensors and actuators used
+
+| Sensor / actuator | Description of use | Libraries used (if any) |
+|---|---|---|
+| DHT11 temperature and humidity sensor (ESP32-S2, GPIO7) | Measures air temperature and humidity every 3 s. The values are uploaded to the dashboard and sent to the MCXC444, which waters 1 s longer when it is hot (≥ 30 °C) or the air is dry (≤ 45 %). | DHTesp by beegee-tokyo: https://github.com/beegee-tokyo/DHTesp |
+| Photoresistor (LDR) module (ESP32-S2, GPIO8) | Measures ambient light as a 12-bit analog value every 1 s (median of 9 samples). It decides bright or dark for the dashboard, and the MCXC444 uses it to switch the grow LED. | None (Arduino `analogRead()`) |
+| Soil moisture probe (MCXC444, PTB2) | Analog probe read by ADC0 every 500 ms; a higher reading means drier soil. A reading above 1200 requests watering. | None (bare-metal ADC0 driver, `adc.c`) |
+| Water-level probe (MCXC444, PTC6) | Analog output compared with a 1.65 V reference by the on-chip comparator CMP0, which interrupts when the reservoir level crosses the threshold. | None (bare-metal CMP0 driver, `cmp.c`) |
+| Water pump (MCXC444, PTE30) | Main watering actuator: switched on for 3–4 s when the soil is dry, followed by a 30 s cooldown. | None (bare-metal GPIO, `gpio.c`) |
+| Servo motor on a water valve (MCXC444, PTD3) | Fallback watering actuator: opens the valve for 5–6 s when the soil has stayed dry for 60 s, i.e. when the pump is down. | None (bare-metal TPM0 PWM driver, `pwm.c`) |
+| Buzzer (MCXC444, PTA13) | Sounds while the reservoir is low. | None (bare-metal GPIO, `gpio.c`) |
+| Grow LED (MCXC444, PTA5) | Switched on while it is dark, to give the plant light. | None (bare-metal GPIO, `gpio.c`) |
+
+The MCXC444 firmware also uses the FreeRTOS kernel and the NXP MCUXpresso SDK (start-up code, clock set-up and debug console). The ESP32-S2 sketch also uses the Arduino-ESP32 core (Wi-Fi, HTTPS, UART) and Arduino_JSON to build the upload.
 
 ---
 
