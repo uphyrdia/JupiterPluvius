@@ -42,7 +42,10 @@
 
 #define SOIL_MOISTURE_SAMPLING_PERIOD	 500U
 #define SEND_INTERVAL_MS				1000U
-#define PUMP_COOLDOWN_MS               10000U
+#define PUMP_COOLDOWN_MS               30000U	// to avoid overwhelming the plant
+/* If the soil is still dry this long after it was last wet, the pump is assumed
+ * to be down and the servo valve waters the plant as well. */
+#define SERVO_FALLBACK_MS				60000U
 
 QueueHandle_t queue;
 SemaphoreHandle_t pump_sema;
@@ -99,29 +102,6 @@ static void recvTask(void *p)
 	}
 }
 
-/* Same rule as pumpTask: the servo opens (SERVO_MAX) to water and closes (SERVO_MIN) after. */
-static void servoTask(void *p)
-{
-	setTPMClock();
-	initPWM();
-	setServoPulse(SERVO_MIN);
-	startPWM();
-	for (;;) {
-		while (xSemaphoreTake(servo_sema, portMAX_DELAY) != pdTRUE) {}
-		if (moisture <= SOIL_MOISTURE_ADC_THRESHOLD) continue;
-
-		unsigned int duration_ms = 5000U;
-		if (temperature >= 30.0f || humidity <= 45.0f)
-			duration_ms += 1000U;
-
-		setServoPulse(SERVO_MAX);
-		vTaskDelay(pdMS_TO_TICKS(duration_ms));
-		setServoPulse(SERVO_MIN);
-
-		vTaskDelay(pdMS_TO_TICKS(PUMP_COOLDOWN_MS));
-	}
-}
-
 static void sendTask(void *p)
 {
 	static TMessage msg;
@@ -152,15 +132,48 @@ static void pumpTask(void *p)
 	}
 }
 
+/* A servo controls a valve to water the plant.
+ * It acts as a fallback plan that is only activated when the pump is down.
+ * Same rule as pumpTask:
+ * the servo opens (SERVO_MAX) to water and closes (SERVO_MIN) after a duration
+ * that is adjusted based on temperature and humidity readings. */
+static void servoTask(void *p)
+{
+	setTPMClock();
+	initPWM();
+	setServoPulse(SERVO_MIN);
+	startPWM();
+	for (;;) {
+		while (xSemaphoreTake(servo_sema, portMAX_DELAY) != pdTRUE) {}
+		if (moisture <= SOIL_MOISTURE_ADC_THRESHOLD) continue;
+
+		unsigned int duration_ms = 5000U;
+		if (temperature >= 30.0f || humidity <= 45.0f)
+			duration_ms += 1000U;
+
+		setServoPulse(SERVO_MAX);
+		vTaskDelay(pdMS_TO_TICKS(duration_ms));
+		setServoPulse(SERVO_MIN);
+
+		vTaskDelay(pdMS_TO_TICKS(PUMP_COOLDOWN_MS));
+	}
+}
+
 static void soil_moisture_sensor_task(void *p)
 {
+	/* Tick count of the last wet sample. Starting at boot means soil that is
+	 * already dry at power-up also falls back to the servo after a minute. */
+	TickType_t last_wet = xTaskGetTickCount();
 	for (;;) {
 		moisture = poll_soil_adc();
 
 		if (moisture > SOIL_MOISTURE_ADC_THRESHOLD) {
 			xSemaphoreGive(pump_sema);
-			xSemaphoreGive(servo_sema);
+			/* Unsigned subtraction stays correct when the tick count wraps around. */
+			if ((TickType_t)(xTaskGetTickCount() - last_wet) >= pdMS_TO_TICKS(SERVO_FALLBACK_MS))
+				xSemaphoreGive(servo_sema);
 		}
+		else last_wet = xTaskGetTickCount();
 
 		if (xSemaphoreTake(print_mutex, portMAX_DELAY) == pdTRUE) {
 			PRINTF("Soil moisture ADC: %u\r\n", moisture); // Raw 0..4095
@@ -183,7 +196,6 @@ static void water_level_sensor_task(void *p)
 	for (;;) {
 		while (xSemaphoreTake(reservoir_level_sema, portMAX_DELAY) != pdTRUE) {}
 		updateBuzzer();
-
 		if (xSemaphoreTake(print_mutex, portMAX_DELAY) == pdTRUE) {
 			PRINTF("Reservoir level: %d\r\n", reservoir_level_ok);
 			xSemaphoreGive(print_mutex);
