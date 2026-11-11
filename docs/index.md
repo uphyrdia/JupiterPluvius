@@ -176,7 +176,7 @@ Interrupt handlers only capture an event and hand the rest to a task (deferred i
 
 Both directions use the same ASCII frame (Figure 3): `@`, the tag `DATA|`, a payload of comma-separated `KEY:value` pairs, `*`, a CRC-16 as four hexadecimal digits and a line feed. The checksum is CRC-16/CCITT-FALSE (polynomial 0x1021, initial value 0xFFFF) over the tag and payload. A frame is at most 255 bytes, so it fits a 256-byte buffer.
 
-![Frame layout: @, DATA|, payload, *, four hex CRC digits, line feed, with an example frame in each direction](img/fig6-frame-format.png)
+![Frame layout: start marker, DATA tag, payload, separator, four hex CRC digits, line feed, with an example frame in each direction](img/fig6-frame-format.png)
 
 **Figure 3.** Frame format, with an example in each direction.
 
