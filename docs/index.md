@@ -41,12 +41,12 @@ Two microcontrollers share the work (Figure 1). The **MCXC444** runs FreeRTOS an
 |---|---|---|
 | DHT11 (ESP32-S2) | Air temperature (°C) and humidity (%), read every 3 s. Uploaded, and sent to the MCXC444, which waters 1 s longer at ≥ 30 °C or ≤ 45 % humidity. | DHTesp by beegee-tokyo: https://github.com/beegee-tokyo/DHTesp |
 | LDR module (ESP32-S2) | 12-bit light reading every 1 s (median of 9 samples; lower is brighter). Uploaded as bright or dark, and sent to the MCXC444, which turns the grow LED on at ≥ 1000 (dark). | None (Arduino `analogRead()`) |
-| Soil moisture probe (MCXC444) | 12-bit reading every 500 ms (higher is drier). Above 1200 requests watering. | None (bare-metal ADC0, `adc.c`) |
-| Water-level probe (MCXC444) | Compared with 1.65 V by the on-chip comparator; one bit, level OK or low. Drives the buzzer. | None (bare-metal CMP0, `cmp.c`) |
-| Water pump | Runs 3 s (4 s when hot or dry) while the soil is dry, then a 30 s cooldown. | None (bare-metal GPIO, `gpio.c`) |
-| Servo valve | Fallback: opens 5 s (6 s when hot or dry) once the soil has stayed dry for 60 s. | None (bare-metal TPM0 PWM, `pwm.c`) |
-| Buzzer | On while the reservoir is low. | None (`gpio.c`) |
-| Grow LED | On while it is dark. | None (`gpio.c`) |
+| Soil moisture probe (MCXC444) | 12-bit reading every 500 ms (higher is drier). Above 1200 requests watering. | None (bare-metal ADC0) |
+| Water-level probe (MCXC444) | Compared with 1.65 V by the on-chip comparator; one bit, level OK or low. Drives the buzzer. | None (bare-metal CMP0) |
+| Water pump | Runs 3 s (4 s when hot or dry) while the soil is dry, then a 30 s cooldown. | None (bare-metal GPIO) |
+| Servo valve | Fallback: opens 5 s (6 s when hot or dry) once the soil has stayed dry for 60 s. | None (bare-metal TPM0 PWM) |
+| Buzzer | On while the reservoir is low. | None (bare-metal GPIO) |
+| Grow LED | On while it is dark. | None (bare-metal GPIO) |
 
 The MCXC444 firmware also uses the FreeRTOS kernel and the NXP MCUXpresso SDK (start-up, clocks, debug console). The ESP32-S2 sketch also uses the Arduino-ESP32 core (Wi-Fi, HTTPS, UART) and Arduino_JSON.
 
