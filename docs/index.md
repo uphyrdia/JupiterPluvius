@@ -118,7 +118,7 @@ The communication tasks have the highest priority so the UART link is serviced p
 
 #### Coordination & synchronisation
 
-Interrupt handlers only capture an event and hand the rest to a task (deferred interrupt processing). No task polls for an event: each waits on one RTOS object or on `vTaskDelay()` (Figure 2, Table 4).
+Interrupt handlers only capture an event and hand the rest to a task (deferred interrupt processing). Each task blocks on one RTOS object, or on `vTaskDelay()` if it is periodic (Figure 2, Table 4). The only polled input is the soil probe, sampled every 500 ms.
 
 ![MCXC444 tasks, interrupts and synchronisation objects, one row per data path](img/fig2-tasks-and-sync.png)
 
@@ -238,7 +238,7 @@ All requests are JSON over HTTPS, with the server certificate verified against r
 - **Redundant watering.** A failed pump is inferred from soil that stays dry for 60 s, and a servo valve then waters as well.
 - **Control across both boards.** Watering time depends on the ESP32-S2's temperature and humidity, and the grow LED on its light reading.
 - **Hardware reservoir alarm.** The comparator, with hysteresis, interrupts only when the level crosses the threshold, so the buzzer reacts at once without polling.
-- **Fully event-driven firmware.** No task polls for an event and no UART byte is busy-waited for.
+- **Interrupt-driven where it matters.** UART bytes and reservoir-level changes arrive by interrupt and wake a task through a queue or semaphore, so nothing busy-waits on them. Only the soil probe is polled, every 500 ms, because soil moisture changes slowly.
 - **Robust data path.** CRC-16 frames that re-synchronise on their own, and fault codes instead of stale values in the cloud.
 - **Secure cloud access.** Verified HTTPS, separate device and dashboard accounts, and row-level security.
 - **AI check-up.** An on-demand summary of the plant's condition with advice, on a dashboard reachable from anywhere.
