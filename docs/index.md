@@ -238,7 +238,7 @@ All requests are JSON over HTTPS, with the server certificate verified against r
 - **Redundant watering.** A failed pump is inferred from soil that stays dry for 60 s, and a servo valve then waters as well.
 - **Control across both boards.** Watering time depends on the ESP32-S2's temperature and humidity, and the grow LED on its light reading.
 - **Hardware reservoir alarm.** The comparator, with hysteresis, interrupts only when the level crosses the threshold, so the buzzer reacts at once without polling.
-- **Interrupt-driven where it matters.** UART bytes and reservoir-level changes arrive by interrupt and wake a task through a queue or semaphore, so nothing busy-waits on them. Only the soil probe is polled, every 500 ms, because soil moisture changes slowly.
+- **Interrupt-driven where it matters.** UART bytes and reservoir-level changes arrive by interrupt and wake a task through a queue or semaphore, so nothing busy-waits on them. Only the soil probe is sampled periodically: its reading is needed as a number, for the dashboard and the threshold check, so there is no single event to interrupt on, and soil moisture changes slowly enough that 500 ms is ample.
 - **Robust data path.** CRC-16 frames that re-synchronise on their own, and fault codes instead of stale values in the cloud.
 - **Secure cloud access.** Verified HTTPS, separate device and dashboard accounts, and row-level security.
 - **AI check-up.** An on-demand summary of the plant's condition with advice, on a dashboard reachable from anywhere.
